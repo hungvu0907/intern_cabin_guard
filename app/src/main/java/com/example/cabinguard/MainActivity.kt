@@ -1,24 +1,23 @@
+package com.example.cabinguard
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import com.example.cabinguard.ui.dashboard.DashboardScreen
+import com.example.cabinguard.ui.theme.CabinGuardTheme
+import dagger.hilt.android.AndroidEntryPoint
+
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    override fun onCreate(
-        savedInstanceState: Bundle?
-    ) {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val sensorEngine =
-            CabinSensorEngine()
-
-        lifecycleScope.launch {
-
-            sensorEngine
-                .observeTelemetry()
-                .collect { telemetry ->
-
-                    Log.d(
-                        "CabinGuard",
-                        telemetry.toString()
-                    )
-                }
+        enableEdgeToEdge()
+        setContent {
+            CabinGuardTheme {
+                DashboardScreen()
+            }
         }
     }
 }
