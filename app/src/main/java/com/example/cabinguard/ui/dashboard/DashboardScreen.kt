@@ -26,8 +26,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.cabinguard.data.local.CabinTelemetry
 import com.example.cabinguard.domain.model.CabinUiState
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,6 +37,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
+import android.os.Build
+import com.example.cabinguard.service.CabinTelemetryService
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -120,8 +126,8 @@ fun DashboardScreen(
             }
         }
     }
-} 
-// Hiển thị 3 đồng hồ đo realtime.
+}
+
 // Hiển thị 3 đồng hồ đo + lịch sử log realtime.
 @Composable
 private fun DashboardContent(
@@ -135,6 +141,11 @@ private fun DashboardContent(
             .fillMaxSize()
             .padding(top = 12.dp)
     ) {
+        // Nút điều khiển Foreground Service (giám sát nền)
+        item {
+            ServiceControlRow()
+        }
+
         // Banner cảnh báo — chỉ hiển thị khi isWarning = true
         if (isWarning) {
             item {
@@ -219,9 +230,43 @@ private fun DashboardContent(
     }
 }
 
-/**
- * [UI-03] LogHistoryItem — Hiển thị 1 dòng log trong danh sách lịch sử.
- */
+@Composable
+private fun ServiceControlRow() {
+    val context = LocalContext.current
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        CabinTelemetryService.start(context)
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Button(
+            onClick = {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    CabinTelemetryService.start(context)
+                }
+            },
+            modifier = Modifier.weight(1f)
+        ) {
+            Text("▶ Bật giám sát nền")
+        }
+        OutlinedButton(
+            onClick = { CabinTelemetryService.stop(context) },
+            modifier = Modifier.weight(1f)
+        ) {
+            Text("⏹ Tắt giám sát nền")
+        }
+    }
+}
+
 @Composable
 private fun LogHistoryItem(log: CabinTelemetry) {
     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -244,27 +289,23 @@ private fun LogHistoryItem(log: CabinTelemetry) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Cột 1: Thời gian
             Text(
                 text = timeText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            // Cột 2: Nhiệt độ
             Text(
                 text = "${String.format("%.1f", log.temperature)}°C",
                 fontWeight = FontWeight.Medium,
                 color = if (log.temperature > CabinTelemetry.TEMP_WARNING_THRESHOLD)
                     Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface
             )
-            // Cột 3: CO2
             Text(
                 text = "${String.format("%.0f", log.co2Level)} ppm",
                 fontWeight = FontWeight.Medium,
                 color = if (log.co2Level > CabinTelemetry.CO2_WARNING_THRESHOLD)
                     Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface
             )
-            // Cột 4: Icon cảnh báo
             Text(
                 text = if (log.isWarning) "⚠️" else "✅",
                 fontSize = 16.sp
