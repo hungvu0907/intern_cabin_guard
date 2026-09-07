@@ -6,6 +6,8 @@ import com.example.cabinguard.data.local.CabinTelemetryDao
 import com.example.cabinguard.domain.sensor.CabinSensorEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -14,17 +16,22 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
-    sensorEngine: CabinSensorEngine,
+    private val sensorEngine: CabinSensorEngine,
     private val telemetryDao: CabinTelemetryDao
 ) : ViewModel() {
 
+    private val isPaused = MutableStateFlow(false)
+    private var collectJob: Job? = null
+
     val uiState: StateFlow<DashboardUiState> = combine(
         telemetryDao.observeLatest(),
-        telemetryDao.observeAll()
-    ) { latest, history ->
+        telemetryDao.observeAll(),
+        isPaused
+    ) { latest, history, paused ->
         DashboardUiState(
             latest = latest,
-            history = history
+            history = history,
+            isPaused = paused
         )
     }.stateIn(
         scope = viewModelScope,
@@ -33,7 +40,25 @@ class DashboardViewModel @Inject constructor(
     )
 
     init {
-        viewModelScope.launch {
+        startCollecting()
+    }
+
+    fun pauseMonitoring() {
+        if (isPaused.value) return
+        collectJob?.cancel()
+        collectJob = null
+        isPaused.value = true
+    }
+
+    fun resumeMonitoring() {
+        if (!isPaused.value && collectJob?.isActive == true) return
+        isPaused.value = false
+        startCollecting()
+    }
+
+    private fun startCollecting() {
+        if (collectJob?.isActive == true) return
+        collectJob = viewModelScope.launch {
             sensorEngine.observeTelemetry().collect { telemetry ->
                 telemetryDao.insert(telemetry)
             }

@@ -14,9 +14,9 @@ class CabinSensorEngineTest {
     fun `emits telemetry inside the configured sensor ranges`() = runBlocking {
         val telemetry = engine.observeTelemetry().first()
 
-        assertTrue(telemetry.temperature in 18.0..<50.0)
-        assertTrue(telemetry.pressure in 100.0..<2000.0)
-        assertTrue(telemetry.co2Level in 400..<2000)
+        assertTrue(telemetry.temperature in 25.0..<45.0)
+        assertTrue(telemetry.pressure in 980.0..<1020.0)
+        assertTrue(telemetry.co2Level in 400..1200)
         assertTrue(telemetry.timestamp > 0)
     }
 

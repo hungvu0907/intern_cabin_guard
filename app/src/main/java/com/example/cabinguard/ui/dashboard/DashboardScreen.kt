@@ -107,14 +107,14 @@ fun DashboardContent(
                 MetricGauge(
                     label = "Nhiệt độ",
                     valueText = "%.1f °C".format(latest.temperature),
-                    progress = ((latest.temperature - 18.0) / 32.0).toFloat().coerceIn(0f, 1f),
+                    progress = ((latest.temperature - 25.0) / 20.0).toFloat().coerceIn(0f, 1f),
                     warning = latest.temperature > 38,
                     modifier = Modifier.weight(1f)
                 )
                 MetricGauge(
                     label = "Áp suất",
                     valueText = "%.0f hPa".format(latest.pressure),
-                    progress = ((latest.pressure - 100.0) / 1900.0).toFloat().coerceIn(0f, 1f),
+                    progress = ((latest.pressure - 980.0) / 40.0).toFloat().coerceIn(0f, 1f),
                     warning = false,
                     modifier = Modifier.weight(1f)
                 )

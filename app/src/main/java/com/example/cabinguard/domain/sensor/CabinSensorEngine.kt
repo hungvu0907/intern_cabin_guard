@@ -26,9 +26,9 @@ class CabinSensorEngine @Inject constructor(){
     fun observeTelemetry(): Flow<CabinTelemetry> = flow {
         while (currentCoroutineContext().isActive) {
             val timestamp = System.currentTimeMillis()
-            val temperature = Random.nextDouble(18.0, 50.0)
-            val pressure = Random.nextDouble(100.0, 2000.0)
-            val co2Level = Random.nextInt(400, 2000)
+            val temperature = Random.nextDouble(25.0, 45.0)
+            val pressure = Random.nextDouble(980.0, 1020.0)
+            val co2Level = Random.nextInt(400, 1201)
             val isWarning = co2Level > 1000 || temperature > 38
 
             val telemetry = CabinTelemetry(
