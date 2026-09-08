@@ -9,10 +9,12 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlin.random.Random
 import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 
-class CabinSensorEngine @Inject constructor(){
+@Singleton
+class CabinSensorEngine @Inject constructor() {
 
     private val scanInterval = MutableStateFlow(1_000L)
 

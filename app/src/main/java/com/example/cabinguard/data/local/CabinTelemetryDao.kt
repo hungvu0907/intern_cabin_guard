@@ -35,6 +35,15 @@ interface CabinTelemetryDao {
 
     @Query(
         """
+        SELECT COUNT(*)
+        FROM cabin_telemetry
+        """
+    )
+    fun observeCount():
+        Flow<Int>
+
+    @Query(
+        """
         DELETE FROM cabin_telemetry
         WHERE timestamp < :cutoff
         """
