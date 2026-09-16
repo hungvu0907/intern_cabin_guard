@@ -6,6 +6,7 @@ import com.example.cabinguard.data.local.CabinTelemetry
 import com.example.cabinguard.data.repository.CabinTelemetryRepository
 import com.example.cabinguard.domain.engine.CabinSensorEngine
 import com.example.cabinguard.domain.model.CabinUiState
+import com.example.cabinguard.service.CabinTelemetryService
 import android.util.Log
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,21 +40,21 @@ class CabinViewModel @Inject constructor(
     
     
 
-    private fun startCollectingSensorData(){
+    private fun startCollectingSensorData() {
         viewModelScope.launch {
-            sensorEngine.sensorFlow.collect{telemetry ->
-                // Debug: In dữ liệu ra Logcat để verify
+            sensorEngine.sensorFlow.collect { telemetry ->
                 Log.d("CabinVM", "🌡 Temp=${telemetry.temperature}°C | 💨 CO2=${telemetry.co2Level}ppm | ⚠ Warning=${telemetry.isWarning}")
 
-                //1. Calculate UI State (Normal/Warning)
-                _uiState.value = if(telemetry.isWarning){
+                _uiState.value = if (telemetry.isWarning) {
                     CabinUiState.Warning(telemetry)
-                }else{
+                } else {
                     CabinUiState.Normal(telemetry)
                 }
-                //2. Save to Room DB
-                repository.saveTelemetry(telemetry)
-                
+
+                // Service đang chạy thì Service là người ghi Room — tránh 2 bản ghi / interval.
+                if (!CabinTelemetryService.isRunning) {
+                    repository.saveTelemetry(telemetry)
+                }
             }
         }
     }

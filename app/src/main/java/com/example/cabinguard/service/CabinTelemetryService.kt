@@ -49,6 +49,7 @@ class CabinTelemetryService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         Log.d(TAG, "onCreate")
         createNotificationChannel()
     }
@@ -72,6 +73,7 @@ class CabinTelemetryService : Service() {
         collectJob = serviceScope.launch {
             try {
                 sensorEngine.sensorFlow.collect { telemetry ->
+                    // Service là nguồn ghi Room khi đang chạy (ViewModel chỉ cập nhật UI).
                     repository.saveTelemetry(telemetry)
                     recordCount++
                     Log.d(TAG, "Đã lưu #$recordCount | temp=${telemetry.temperature} co2=${telemetry.co2Level} warn=${telemetry.isWarning}")
@@ -147,6 +149,7 @@ class CabinTelemetryService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
         Log.w(TAG, "onDestroy — service bị dừng (đã thu thập $recordCount bản ghi)")
         // Hủy scope → dừng collect flow, tránh rò rỉ coroutine.
         serviceScope.cancel()
@@ -156,6 +159,11 @@ class CabinTelemetryService : Service() {
         private const val TAG = "CabinService"
         private const val CHANNEL_ID = "cabin_telemetry_channel"
         private const val NOTIFICATION_ID = 1001
+
+        // ViewModel đọc cờ này để không ghi Room khi Service đang thu thập.
+        @Volatile
+        var isRunning: Boolean = false
+            internal set
 
         // Bật service (dùng startForegroundService để tuân thủ giới hạn nền).
         fun start(context: Context) {

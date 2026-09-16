@@ -9,22 +9,14 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CabinSensorEngineTest {
 
-    private lateinit var engine: CabinSensorEngine
-
-    @Before
-    fun setup() {
-        engine = CabinSensorEngine()
-    }
-
     @Test
     fun `sensorFlow emits values within spec ranges`() = runTest {
-        engine.dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
         val results = mutableListOf<CabinTelemetry>()
         backgroundScope.launch {
             engine.sensorFlow.collect { results.add(it) }
@@ -43,7 +35,7 @@ class CabinSensorEngineTest {
 
     @Test
     fun `isWarning matches temperature or CO2 threshold`() = runTest {
-        engine.dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
         val results = mutableListOf<CabinTelemetry>()
         backgroundScope.launch {
             engine.sensorFlow.collect { results.add(it) }
@@ -63,7 +55,7 @@ class CabinSensorEngineTest {
 
     @Test
     fun `setInterval 5s delays the next emission`() = runTest {
-        engine.dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
         engine.setInterval(5_000L)
         val collected = mutableListOf<CabinTelemetry>()
         backgroundScope.launch {
@@ -84,7 +76,7 @@ class CabinSensorEngineTest {
 
     @Test
     fun `default interval emits about every 1 second`() = runTest {
-        engine.dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
         val collected = mutableListOf<CabinTelemetry>()
         backgroundScope.launch {
             engine.sensorFlow.collect { collected.add(it) }
@@ -100,5 +92,24 @@ class CabinSensorEngineTest {
         advanceTimeBy(1)
         runCurrent()
         assertEquals(2, collected.size)
+    }
+
+    @Test
+    fun `two collectors receive the same shared emissions`() = runTest {
+        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
+        val first = mutableListOf<CabinTelemetry>()
+        val second = mutableListOf<CabinTelemetry>()
+
+        backgroundScope.launch { engine.sensorFlow.collect { first.add(it) } }
+        backgroundScope.launch { engine.sensorFlow.collect { second.add(it) } }
+
+        runCurrent()
+        advanceTimeBy(2_000)
+        runCurrent()
+
+        assertTrue(first.size >= 3)
+        assertEquals(first.map { it.timestamp }, second.map { it.timestamp })
+        assertEquals(first.map { it.temperature }, second.map { it.temperature })
+        assertEquals(first.map { it.isWarning }, second.map { it.isWarning })
     }
 }

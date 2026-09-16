@@ -2,45 +2,60 @@ package com.example.cabinguard.domain.engine
 
 import com.example.cabinguard.data.local.CabinTelemetry
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.shareIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class CabinSensorEngine @Inject constructor() {
+class CabinSensorEngine(
+    dispatcher: CoroutineDispatcher
+) {
+
+    // Hilt inject constructor không-tham-số; unit test truyền TestDispatcher vào constructor kia.
+    @Inject
+    constructor() : this(Dispatchers.IO)
 
     // @Volatile: thread đọc flow (IO) thấy ngay giá trị mới do receiver (main) đổi.
     @Volatile
     private var intervalMs: Long = 1_000L
 
-    @Volatile
-    var dispatcher: CoroutineDispatcher = Dispatchers.IO
-        internal set
+    private val sharingScope = CoroutineScope(SupervisorJob() + dispatcher)
 
-    val sensorFlow: Flow<CabinTelemetry>
-        get() = flow {
-            while (true) {
-                val temperature = (25..45).random().toFloat()
-                val pressure = (980..1020).random().toFloat()
-                val co2Level = (400..1200).random().toFloat()
-                val isWarning = temperature > CabinTelemetry.TEMP_WARNING_THRESHOLD
-                    || co2Level > CabinTelemetry.CO2_WARNING_THRESHOLD
-                emit(
-                    CabinTelemetry(
-                        timestamp = System.currentTimeMillis(),
-                        temperature = temperature,
-                        pressure = pressure,
-                        co2Level = co2Level,
-                        isWarning = isWarning
-                    )
+    // Hot SharedFlow: ViewModel + Service collect chung một nguồn — cùng timestamp / isWarning.
+    // WhileSubscribed(0): dừng emit khi không còn collector (test không treo; không tốn pin khi idle).
+    // replay = 1: collector vào sau (bật Service) nhận ngay bản mới nhất.
+    val sensorFlow: SharedFlow<CabinTelemetry> = flow {
+        while (true) {
+            val temperature = (25..45).random().toFloat()
+            val pressure = (980..1020).random().toFloat()
+            val co2Level = (400..1200).random().toFloat()
+            val isWarning = temperature > CabinTelemetry.TEMP_WARNING_THRESHOLD
+                || co2Level > CabinTelemetry.CO2_WARNING_THRESHOLD
+            emit(
+                CabinTelemetry(
+                    timestamp = System.currentTimeMillis(),
+                    temperature = temperature,
+                    pressure = pressure,
+                    co2Level = co2Level,
+                    isWarning = isWarning
                 )
-                delay(intervalMs)
-            }
-        }.flowOn(dispatcher)
+            )
+            delay(intervalMs)
+        }
+    }.flowOn(dispatcher)
+        .shareIn(
+            sharingScope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 0),
+            replay = 1
+        )
 
     fun setInterval(ms: Long) {
         intervalMs = ms
