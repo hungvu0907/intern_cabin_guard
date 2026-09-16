@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.shareIn
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.random.Random
 
 @Singleton
 class CabinSensorEngine(
@@ -34,9 +35,9 @@ class CabinSensorEngine(
     // replay = 1: collector vào sau (bật Service) nhận ngay bản mới nhất.
     val sensorFlow: SharedFlow<CabinTelemetry> = flow {
         while (true) {
-            val temperature = (25..45).random().toFloat()
-            val pressure = (980..1020).random().toFloat()
-            val co2Level = (400..1200).random().toFloat()
+            val temperature = randomIn(25f, 45f)
+            val pressure = randomIn(980f, 1020f)
+            val co2Level = randomIn(400f, 1200f)
             val isWarning = temperature > CabinTelemetry.TEMP_WARNING_THRESHOLD
                 || co2Level > CabinTelemetry.CO2_WARNING_THRESHOLD
             emit(
@@ -60,4 +61,8 @@ class CabinSensorEngine(
     fun setInterval(ms: Long) {
         intervalMs = ms
     }
+
+    // nextFloat() ∈ [0, 1) → kết quả ∈ [min, max), có phần thập phân (không chỉ 25f, 26f, …).
+    private fun randomIn(min: Float, max: Float): Float =
+        min + Random.nextFloat() * (max - min)
 }

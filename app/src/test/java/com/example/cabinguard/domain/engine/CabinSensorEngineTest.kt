@@ -31,6 +31,10 @@ class CabinSensorEngineTest {
             assertTrue(telemetry.pressure in 980f..1020f)
             assertTrue(telemetry.co2Level in 400f..1200f)
         }
+        assertTrue(
+            "mô phỏng phải có phần thập phân, không chỉ số nguyên",
+            results.any { it.temperature % 1f != 0f || it.pressure % 1f != 0f || it.co2Level % 1f != 0f }
+        )
     }
 
     @Test

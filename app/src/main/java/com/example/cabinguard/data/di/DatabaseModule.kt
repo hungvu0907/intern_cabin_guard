@@ -25,7 +25,10 @@ object DatabaseModule {
             context,
             CabinDatabase::class.java,
             CabinDatabase.DATABASE_NAME
-        ).build()
+        )
+            // Sprint: đổi schema (Index) thì xóa DB cũ, không viết Migration.
+            .fallbackToDestructiveMigration(dropAllTables = true)
+            .build()
     }
 
     @Provides
