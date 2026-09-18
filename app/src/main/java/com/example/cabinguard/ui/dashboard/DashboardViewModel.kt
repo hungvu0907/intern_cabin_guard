@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 
 @HiltViewModel
@@ -23,11 +24,18 @@ class DashboardViewModel @Inject constructor(
         telemetryDao.observeAll(),
         isPaused
     ) { latest, history, paused ->
-        DashboardUiState(
-            latest = latest,
-            history = history,
-            isPaused = paused
-        )
+        Triple(latest, history, paused)
+    }.scan(DashboardUiState()) { previous, (latest, history, paused) ->
+        // Đang pause thì giữ nguyên số liệu đang hiển thị, Service vẫn ghi Room.
+        if (paused) {
+            previous.copy(isPaused = true)
+        } else {
+            DashboardUiState(
+                latest = latest,
+                history = history,
+                isPaused = false
+            )
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),

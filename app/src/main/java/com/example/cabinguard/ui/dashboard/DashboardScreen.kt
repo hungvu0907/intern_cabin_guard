@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.cabinguard.data.model.CabinTelemetry
+import com.example.cabinguard.domain.sensor.CabinThresholds
 import com.example.cabinguard.ui.theme.CabinGuardTheme
 import java.time.Instant
 import java.time.ZoneId
@@ -49,6 +52,10 @@ private val TrackColor = Color(0x33FFFFFF)
 private val SafeAccent = Color(0xFF3DDC97)
 private val WarningAccent = Color(0xFFFF6B6B)
 
+/** Quy đổi một giá trị đo về tỉ lệ 0..1 trên dải [min, max] để vẽ gauge. */
+private fun Double.progressIn(min: Double, max: Double): Float =
+    ((this - min) / (max - min)).toFloat().coerceIn(0f, 1f)
+
 private val timeFormatter = DateTimeFormatter
     .ofPattern("HH:mm:ss")
     .withZone(ZoneId.systemDefault())
@@ -58,12 +65,22 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    DashboardContent(uiState = uiState)
+    DashboardContent(
+        uiState = uiState,
+        onTogglePause = {
+            if (uiState.isPaused) {
+                viewModel.resumeMonitoring()
+            } else {
+                viewModel.pauseMonitoring()
+            }
+        }
+    )
 }
 
 @Composable
 fun DashboardContent(
-    uiState: DashboardUiState
+    uiState: DashboardUiState,
+    onTogglePause: () -> Unit = {}
 ) {
     val background by animateColorAsState(
         targetValue = if (uiState.isWarning) WarningBackground else SafeBackground,
@@ -82,18 +99,43 @@ fun DashboardContent(
             .statusBarsPadding()
             .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "CabinGuard",
-            color = Color.White,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = if (uiState.isWarning) "CẢNH BÁO: quá nhiệt hoặc khí độc" else "Cabin an toàn",
-            color = if (uiState.isWarning) Color(0xFFFFC9C9) else SafeAccent,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(top = 4.dp)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "CabinGuard",
+                    color = Color.White,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = when {
+                        uiState.isPaused -> "Đã tạm dừng hiển thị · Service vẫn ghi log"
+                        uiState.isWarning -> "CẢNH BÁO: quá nhiệt hoặc khí độc"
+                        else -> "Cabin an toàn"
+                    },
+                    color = when {
+                        uiState.isPaused -> Color.White.copy(alpha = 0.7f)
+                        uiState.isWarning -> Color(0xFFFFC9C9)
+                        else -> SafeAccent
+                    },
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            Button(
+                onClick = onTogglePause,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = cardColor,
+                    contentColor = Color.White
+                )
+            ) {
+                Text(text = if (uiState.isPaused) "Tiếp tục" else "Tạm dừng")
+            }
+        }
 
         Spacer(modifier = Modifier.height(20.dp))
 
@@ -107,14 +149,20 @@ fun DashboardContent(
                 MetricGauge(
                     label = "Nhiệt độ",
                     valueText = "%.1f °C".format(latest.temperature),
-                    progress = ((latest.temperature - 25.0) / 20.0).toFloat().coerceIn(0f, 1f),
-                    warning = latest.temperature > 38,
+                    progress = latest.temperature.progressIn(
+                        CabinThresholds.TEMPERATURE_MIN_CELSIUS,
+                        CabinThresholds.TEMPERATURE_MAX_CELSIUS
+                    ),
+                    warning = latest.temperature > CabinThresholds.TEMPERATURE_WARNING_CELSIUS,
                     modifier = Modifier.weight(1f)
                 )
                 MetricGauge(
                     label = "Áp suất",
                     valueText = "%.0f hPa".format(latest.pressure),
-                    progress = ((latest.pressure - 980.0) / 40.0).toFloat().coerceIn(0f, 1f),
+                    progress = latest.pressure.progressIn(
+                        CabinThresholds.PRESSURE_MIN_HPA,
+                        CabinThresholds.PRESSURE_MAX_HPA
+                    ),
                     warning = false,
                     modifier = Modifier.weight(1f)
                 )
@@ -128,16 +176,21 @@ fun DashboardContent(
                     .background(cardColor, RoundedCornerShape(16.dp))
                     .padding(16.dp)
             ) {
+                val co2OverLimit = latest.co2Level > CabinThresholds.CO2_WARNING_PPM
                 Column {
                     Text(text = "CO2", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
                     Text(
                         text = "${latest.co2Level} ppm",
-                        color = if (latest.co2Level > 1000) Color.White else SafeAccent,
+                        color = if (co2OverLimit) Color.White else SafeAccent,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = if (latest.co2Level > 1000) "Vượt ngưỡng 1000 ppm" else "Dưới ngưỡng 1000 ppm",
+                        text = if (co2OverLimit) {
+                            "Vượt ngưỡng ${CabinThresholds.CO2_WARNING_PPM} ppm"
+                        } else {
+                            "Dưới ngưỡng ${CabinThresholds.CO2_WARNING_PPM} ppm"
+                        },
                         color = Color.White.copy(alpha = 0.75f),
                         fontSize = 12.sp
                     )
