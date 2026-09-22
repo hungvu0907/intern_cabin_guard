@@ -6,7 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.platform.LocalConfiguration
-import com.example.cabinguard.ui.dashboard.DashboardScreen
+import com.example.cabinguard.ui.navigation.CabinNavHost
 import com.example.cabinguard.ui.theme.CabinGuardTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -20,7 +20,7 @@ class MainActivity : ComponentActivity() {
                 Configuration.ORIENTATION_LANDSCAPE
 
             CabinGuardTheme(automotiveMode = isLandscape) {
-                DashboardScreen()
+                CabinNavHost()
             }
         }
     }

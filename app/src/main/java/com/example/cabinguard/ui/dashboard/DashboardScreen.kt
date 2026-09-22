@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.cabinguard.data.local.CabinTelemetry
+import com.example.cabinguard.domain.model.AlertThresholds
 import com.example.cabinguard.domain.model.CabinUiState
 import com.example.cabinguard.ui.theme.LocalAutomotiveMode
 import androidx.compose.animation.animateColorAsState
@@ -38,29 +39,44 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 @Composable
 fun DashboardScreen(
+    onOpenSettings: () -> Unit = {},
     viewModel: CabinViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val historyLogs by viewModel.historyLogs.collectAsState()
+    val thresholds by viewModel.thresholds.collectAsState()
     val isAutomotive = LocalAutomotiveMode.current
 
     if (isAutomotive) {
-        AutomotiveDashboardScreen(uiState = uiState, historyLogs = historyLogs)
+        AutomotiveDashboardScreen(
+            uiState = uiState,
+            historyLogs = historyLogs,
+            thresholds = thresholds,
+            onOpenSettings = onOpenSettings
+        )
     } else {
-        PhoneDashboardScreen(uiState = uiState, historyLogs = historyLogs)
+        PhoneDashboardScreen(
+            uiState = uiState,
+            historyLogs = historyLogs,
+            thresholds = thresholds,
+            onOpenSettings = onOpenSettings
+        )
     }
 }
 
 @Composable
 private fun AutomotiveDashboardScreen(
     uiState: CabinUiState,
-    historyLogs: List<CabinTelemetry>
+    historyLogs: List<CabinTelemetry>,
+    thresholds: AlertThresholds,
+    onOpenSettings: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -85,10 +101,18 @@ private fun AutomotiveDashboardScreen(
                 }
             }
             is CabinUiState.Normal -> AutomotiveDashboardContent(
-                data = state.data, isWarning = false, historyLogs = historyLogs
+                data = state.data,
+                isWarning = false,
+                historyLogs = historyLogs,
+                thresholds = thresholds,
+                onOpenSettings = onOpenSettings
             )
             is CabinUiState.Warning -> AutomotiveDashboardContent(
-                data = state.data, isWarning = true, historyLogs = historyLogs
+                data = state.data,
+                isWarning = true,
+                historyLogs = historyLogs,
+                thresholds = thresholds,
+                onOpenSettings = onOpenSettings
             )
         }
     }
@@ -99,7 +123,9 @@ private fun AutomotiveDashboardScreen(
 @Composable
 private fun PhoneDashboardScreen(
     uiState: CabinUiState,
-    historyLogs: List<CabinTelemetry>
+    historyLogs: List<CabinTelemetry>,
+    thresholds: AlertThresholds,
+    onOpenSettings: () -> Unit
 ) {
     val isWarning = uiState is CabinUiState.Warning
     val backgroundColor by animateColorAsState(
@@ -125,6 +151,11 @@ private fun PhoneDashboardScreen(
                         text = if (isWarning) "⚠️ CabinGuard — CẢNH BÁO!" else "CabinGuard",
                         fontWeight = FontWeight.Bold
                     )
+                },
+                actions = {
+                    TextButton(onClick = onOpenSettings) {
+                        Text("Cài đặt", color = topBarTextColor)
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = topBarColor,
@@ -156,14 +187,16 @@ private fun PhoneDashboardScreen(
                     DashboardContent(
                         data = state.data,
                         isWarning = false,
-                        historyLogs = historyLogs
+                        historyLogs = historyLogs,
+                        thresholds = thresholds
                     )
                 }
                 is CabinUiState.Warning -> {
                     DashboardContent(
                         data = state.data,
                         isWarning = true,
-                        historyLogs = historyLogs
+                        historyLogs = historyLogs,
+                        thresholds = thresholds
                     )
                 }
             }
@@ -177,6 +210,7 @@ private fun DashboardContent(
     data: CabinTelemetry,
     isWarning: Boolean,
     historyLogs: List<CabinTelemetry>,
+    thresholds: AlertThresholds,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -214,7 +248,7 @@ private fun DashboardContent(
                 minValue = 25f,
                 maxValue = 45f,
                 barColor = Color(0xFFFF9800),
-                isWarning = isWarning && data.temperature > CabinTelemetry.TEMP_WARNING_THRESHOLD
+                isWarning = isWarning && data.temperature > thresholds.tempThreshold
             )
         }
 
@@ -242,7 +276,7 @@ private fun DashboardContent(
                 minValue = 400f,
                 maxValue = 1200f,
                 barColor = Color(0xFF4CAF50),
-                isWarning = isWarning && data.co2Level > CabinTelemetry.CO2_WARNING_THRESHOLD
+                isWarning = isWarning && data.co2Level > thresholds.co2Threshold
             )
         }
 
@@ -263,7 +297,7 @@ private fun DashboardContent(
             items = historyLogs,
             key = { it.id }
         ) { log ->
-            LogHistoryItem(log = log)
+            LogHistoryItem(log = log, thresholds = thresholds)
         }
     }
 }
@@ -272,7 +306,7 @@ private fun DashboardContent(
  * [UI-03] LogHistoryItem — Hiển thị 1 dòng log trong danh sách lịch sử.
  */
 @Composable
-private fun LogHistoryItem(log: CabinTelemetry) {
+private fun LogHistoryItem(log: CabinTelemetry, thresholds: AlertThresholds) {
     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     val timeText = timeFormat.format(Date(log.timestamp))
 
@@ -303,14 +337,14 @@ private fun LogHistoryItem(log: CabinTelemetry) {
             Text(
                 text = "${String.format("%.1f", log.temperature)}°C",
                 fontWeight = FontWeight.Medium,
-                color = if (log.temperature > CabinTelemetry.TEMP_WARNING_THRESHOLD)
+                color = if (log.temperature > thresholds.tempThreshold)
                     Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface
             )
             // Cột 3: CO2
             Text(
                 text = "${String.format("%.0f", log.co2Level)} ppm",
                 fontWeight = FontWeight.Medium,
-                color = if (log.co2Level > CabinTelemetry.CO2_WARNING_THRESHOLD)
+                color = if (log.co2Level > thresholds.co2Threshold)
                     Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface
             )
             // Cột 4: Icon cảnh báo

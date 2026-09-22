@@ -22,6 +22,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cabinguard.data.local.CabinTelemetry
+import com.example.cabinguard.domain.model.AlertThresholds
 import com.example.cabinguard.ui.theme.AutoGaugeCo2
 import com.example.cabinguard.ui.theme.AutoGaugePressure
 import com.example.cabinguard.ui.theme.AutoGaugeTemp
@@ -50,6 +52,8 @@ fun AutomotiveDashboardContent(
     data: CabinTelemetry,
     isWarning: Boolean,
     historyLogs: List<CabinTelemetry>,
+    thresholds: AlertThresholds = AlertThresholds(),
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -85,7 +89,7 @@ fun AutomotiveDashboardContent(
                     minValue = 25f,
                     maxValue = 45f,
                     arcColor = AutoGaugeTemp,
-                    isWarning = isWarning && data.temperature > CabinTelemetry.TEMP_WARNING_THRESHOLD,
+                    isWarning = isWarning && data.temperature > thresholds.tempThreshold,
                     modifier = Modifier.weight(1f)
                 )
                 AutomotiveGaugeCard(
@@ -107,7 +111,7 @@ fun AutomotiveDashboardContent(
                     minValue = 400f,
                     maxValue = 1200f,
                     arcColor = AutoGaugeCo2,
-                    isWarning = isWarning && data.co2Level > CabinTelemetry.CO2_WARNING_THRESHOLD,
+                    isWarning = isWarning && data.co2Level > thresholds.co2Threshold,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -126,14 +130,23 @@ fun AutomotiveDashboardContent(
                 .fillMaxHeight()
                 .padding(12.dp)
         ) {
-            // Header
-            Text(
-                text = "CabinGuard",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "CabinGuard",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                TextButton(onClick = onOpenSettings) {
+                    Text("Cài đặt")
+                }
+            }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
             Spacer(modifier = Modifier.height(8.dp))
@@ -156,7 +169,7 @@ fun AutomotiveDashboardContent(
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 items(items = historyLogs, key = { it.id }) { log ->
-                    AutomotiveLogItem(log = log)
+                    AutomotiveLogItem(log = log, thresholds = thresholds)
                 }
             }
         }
@@ -192,7 +205,7 @@ private fun AutomotiveStatusBar(isWarning: Boolean) {
 }
 
 @Composable
-private fun AutomotiveLogItem(log: CabinTelemetry) {
+private fun AutomotiveLogItem(log: CabinTelemetry, thresholds: AlertThresholds) {
     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     val timeText = timeFormat.format(Date(log.timestamp))
 
@@ -221,14 +234,14 @@ private fun AutomotiveLogItem(log: CabinTelemetry) {
                 text = "${String.format("%.1f", log.temperature)}°C",
                 fontWeight = FontWeight.Medium,
                 fontSize = 12.sp,
-                color = if (log.temperature > CabinTelemetry.TEMP_WARNING_THRESHOLD)
+                color = if (log.temperature > thresholds.tempThreshold)
                     AutoWarningRed else MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = "${String.format("%.0f", log.co2Level)}ppm",
                 fontWeight = FontWeight.Medium,
                 fontSize = 12.sp,
-                color = if (log.co2Level > CabinTelemetry.CO2_WARNING_THRESHOLD)
+                color = if (log.co2Level > thresholds.co2Threshold)
                     AutoWarningRed else MaterialTheme.colorScheme.onSurface
             )
             Text(
