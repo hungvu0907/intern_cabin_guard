@@ -8,13 +8,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,6 +55,9 @@ private val TrackColor = Color(0x33FFFFFF)
 private val SafeAccent = Color(0xFF3DDC97)
 private val WarningAccent = Color(0xFFFF6B6B)
 
+/** Kích thước chạm tối thiểu theo guideline Android Automotive. */
+private val MinTouchTarget = 76.dp
+
 /** Quy đổi một giá trị đo về tỉ lệ 0..1 trên dải [min, max] để vẽ gauge. */
 private fun Double.progressIn(min: Double, max: Double): Float =
     ((this - min) / (max - min)).toFloat().coerceIn(0f, 1f)
@@ -77,6 +83,10 @@ fun DashboardScreen(
     )
 }
 
+/**
+ * Layout ngang cho màn hình Android Automotive: header ở trên, bên dưới chia
+ * 60% số đo (3 ô nằm ngang) và 40% lịch sử log.
+ */
 @Composable
 fun DashboardContent(
     uiState: DashboardUiState,
@@ -90,136 +100,160 @@ fun DashboardContent(
         targetValue = if (uiState.isWarning) CardWarning else CardSafe,
         label = "dashboard-card"
     )
-    val latest = uiState.latest
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(background)
-            .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 20.dp)
+            .safeDrawingPadding()
+            .padding(24.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "CabinGuard",
-                    color = Color.White,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = when {
-                        uiState.isPaused -> "Đã tạm dừng hiển thị · Service vẫn ghi log"
-                        uiState.isWarning -> "CẢNH BÁO: quá nhiệt hoặc khí độc"
-                        else -> "Cabin an toàn"
-                    },
-                    color = when {
-                        uiState.isPaused -> Color.White.copy(alpha = 0.7f)
-                        uiState.isWarning -> Color(0xFFFFC9C9)
-                        else -> SafeAccent
-                    },
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            Button(
-                onClick = onTogglePause,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = cardColor,
-                    contentColor = Color.White
-                )
-            ) {
-                Text(text = if (uiState.isPaused) "Tiếp tục" else "Tạm dừng")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        if (latest == null) {
-            Text(text = "Đang đọc cảm biến...", color = Color.White.copy(alpha = 0.7f))
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                MetricGauge(
-                    label = "Nhiệt độ",
-                    valueText = "%.1f °C".format(latest.temperature),
-                    progress = latest.temperature.progressIn(
-                        CabinThresholds.TEMPERATURE_MIN_CELSIUS,
-                        CabinThresholds.TEMPERATURE_MAX_CELSIUS
-                    ),
-                    warning = latest.temperature > CabinThresholds.TEMPERATURE_WARNING_CELSIUS,
-                    modifier = Modifier.weight(1f)
-                )
-                MetricGauge(
-                    label = "Áp suất",
-                    valueText = "%.0f hPa".format(latest.pressure),
-                    progress = latest.pressure.progressIn(
-                        CabinThresholds.PRESSURE_MIN_HPA,
-                        CabinThresholds.PRESSURE_MAX_HPA
-                    ),
-                    warning = false,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(cardColor, RoundedCornerShape(16.dp))
-                    .padding(16.dp)
-            ) {
-                val co2OverLimit = latest.co2Level > CabinThresholds.CO2_WARNING_PPM
-                Column {
-                    Text(text = "CO2", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
-                    Text(
-                        text = "${latest.co2Level} ppm",
-                        color = if (co2OverLimit) Color.White else SafeAccent,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = if (co2OverLimit) {
-                            "Vượt ngưỡng ${CabinThresholds.CO2_WARNING_PPM} ppm"
-                        } else {
-                            "Dưới ngưỡng ${CabinThresholds.CO2_WARNING_PPM} ppm"
-                        },
-                        color = Color.White.copy(alpha = 0.75f),
-                        fontSize = 12.sp
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Text(
-            text = "Lịch sử log",
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 16.sp
+        DashboardHeader(
+            uiState = uiState,
+            cardColor = cardColor,
+            onTogglePause = onTogglePause
         )
-        Spacer(modifier = Modifier.height(8.dp))
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 16.dp)
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            items(
-                items = uiState.history,
-                key = { it.id }
-            ) { item ->
-                HistoryRow(item = item, cardColor = cardColor)
-            }
+            MetricsPane(
+                latest = uiState.latest,
+                cardColor = cardColor,
+                modifier = Modifier
+                    .weight(0.6f)
+                    .fillMaxHeight()
+            )
+            HistoryPane(
+                history = uiState.history,
+                cardColor = cardColor,
+                modifier = Modifier
+                    .weight(0.4f)
+                    .fillMaxHeight()
+            )
         }
+    }
+}
+
+@Composable
+private fun DashboardHeader(
+    uiState: DashboardUiState,
+    cardColor: Color,
+    onTogglePause: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "CabinGuard",
+                color = Color.White,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = when {
+                    uiState.isPaused -> "Đã tạm dừng hiển thị · Service vẫn ghi log"
+                    uiState.isWarning -> "CẢNH BÁO: quá nhiệt hoặc khí độc"
+                    else -> "Cabin an toàn"
+                },
+                color = when {
+                    uiState.isPaused -> Color.White.copy(alpha = 0.7f)
+                    uiState.isWarning -> Color(0xFFFFC9C9)
+                    else -> SafeAccent
+                },
+                fontSize = 18.sp,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+        Button(
+            onClick = onTogglePause,
+            modifier = Modifier.heightIn(min = MinTouchTarget),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = cardColor,
+                contentColor = Color.White
+            ),
+            contentPadding = PaddingValues(horizontal = 32.dp)
+        ) {
+            Text(
+                text = if (uiState.isPaused) "Tiếp tục" else "Tạm dừng",
+                fontSize = 20.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetricsPane(
+    latest: CabinTelemetry?,
+    cardColor: Color,
+    modifier: Modifier = Modifier
+) {
+    if (latest == null) {
+        Box(modifier = modifier, contentAlignment = Alignment.Center) {
+            Text(
+                text = "Đang đọc cảm biến...",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 18.sp
+            )
+        }
+        return
+    }
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        MetricCard(cardColor = cardColor) {
+            MetricGauge(
+                label = "Nhiệt độ",
+                valueText = "%.1f °C".format(latest.temperature),
+                progress = latest.temperature.progressIn(
+                    CabinThresholds.TEMPERATURE_MIN_CELSIUS,
+                    CabinThresholds.TEMPERATURE_MAX_CELSIUS
+                ),
+                warning = latest.temperature > CabinThresholds.TEMPERATURE_WARNING_CELSIUS
+            )
+        }
+        MetricCard(cardColor = cardColor) {
+            MetricGauge(
+                label = "Áp suất",
+                valueText = "%.0f hPa".format(latest.pressure),
+                progress = latest.pressure.progressIn(
+                    CabinThresholds.PRESSURE_MIN_HPA,
+                    CabinThresholds.PRESSURE_MAX_HPA
+                ),
+                warning = false
+            )
+        }
+        MetricCard(cardColor = cardColor) {
+            Co2Reading(co2Level = latest.co2Level)
+        }
+    }
+}
+
+/** Một ô số đo; 3 ô chia đều chiều ngang và cao bằng nhau. */
+@Composable
+private fun RowScope.MetricCard(
+    cardColor: Color,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .background(cardColor, RoundedCornerShape(16.dp))
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
     }
 }
 
@@ -228,52 +262,99 @@ private fun MetricGauge(
     label: String,
     valueText: String,
     progress: Float,
-    warning: Boolean,
-    modifier: Modifier = Modifier
+    warning: Boolean
 ) {
     val accent = if (warning) WarningAccent else SafeAccent
 
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
+    // aspectRatio tự lấy cạnh nhỏ hơn của ô, nên gauge co theo màn hình thấp.
+    Box(
+        modifier = Modifier.aspectRatio(1f),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier.size(148.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val strokeWidth = 14.dp.toPx()
-                val arcSize = Size(size.minDimension - strokeWidth, size.minDimension - strokeWidth)
-                val topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f)
-                val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val strokeWidth = 16.dp.toPx()
+            val arcSize = Size(size.minDimension - strokeWidth, size.minDimension - strokeWidth)
+            val topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f)
+            val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round)
 
-                drawArc(
-                    color = TrackColor,
-                    startAngle = 135f,
-                    sweepAngle = 270f,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = stroke
-                )
-                drawArc(
-                    color = accent,
-                    startAngle = 135f,
-                    sweepAngle = 270f * progress,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = stroke
-                )
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = valueText,
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(text = label, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+            drawArc(
+                color = TrackColor,
+                startAngle = 135f,
+                sweepAngle = 270f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = stroke
+            )
+            drawArc(
+                color = accent,
+                startAngle = 135f,
+                sweepAngle = 270f * progress,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = stroke
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = valueText,
+                color = Color.White,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(text = label, color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)
+        }
+    }
+}
+
+@Composable
+private fun Co2Reading(co2Level: Int) {
+    val co2OverLimit = co2Level > CabinThresholds.CO2_WARNING_PPM
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = "CO2", color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)
+        Text(
+            text = "$co2Level ppm",
+            color = if (co2OverLimit) Color.White else SafeAccent,
+            fontSize = 32.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = if (co2OverLimit) {
+                "Vượt ngưỡng ${CabinThresholds.CO2_WARNING_PPM} ppm"
+            } else {
+                "Dưới ngưỡng ${CabinThresholds.CO2_WARNING_PPM} ppm"
+            },
+            color = Color.White.copy(alpha = 0.75f),
+            fontSize = 14.sp
+        )
+    }
+}
+
+@Composable
+private fun HistoryPane(
+    history: List<CabinTelemetry>,
+    cardColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = "Lịch sử log",
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 18.sp
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 16.dp)
+        ) {
+            items(
+                items = history,
+                key = { it.id }
+            ) { item ->
+                HistoryRow(item = item, cardColor = cardColor)
             }
         }
     }
@@ -317,7 +398,7 @@ private fun HistoryRow(
     }
 }
 
-@Preview
+@Preview(device = "spec:width=1280dp,height=720dp,dpi=160")
 @Composable
 private fun DashboardWarningPreview() {
     CabinGuardTheme {
