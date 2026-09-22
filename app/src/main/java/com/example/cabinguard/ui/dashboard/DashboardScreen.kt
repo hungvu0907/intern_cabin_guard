@@ -25,9 +25,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.cabinguard.data.local.CabinTelemetry
 import com.example.cabinguard.domain.model.CabinUiState
+import com.example.cabinguard.ui.theme.LocalAutomotiveMode
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,15 +42,65 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     viewModel: CabinViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val historyLogs by viewModel.historyLogs.collectAsState()
+    val isAutomotive = LocalAutomotiveMode.current
 
-    //Animation màu nền khi chuyển trạng thái
+    if (isAutomotive) {
+        AutomotiveDashboardScreen(uiState = uiState, historyLogs = historyLogs)
+    } else {
+        PhoneDashboardScreen(uiState = uiState, historyLogs = historyLogs)
+    }
+}
+
+@Composable
+private fun AutomotiveDashboardScreen(
+    uiState: CabinUiState,
+    historyLogs: List<CabinTelemetry>
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        when (val state = uiState) {
+            is CabinUiState.Loading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Đang kết nối cảm biến...",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                }
+            }
+            is CabinUiState.Normal -> AutomotiveDashboardContent(
+                data = state.data, isWarning = false, historyLogs = historyLogs
+            )
+            is CabinUiState.Warning -> AutomotiveDashboardContent(
+                data = state.data, isWarning = true, historyLogs = historyLogs
+            )
+        }
+    }
+}
+
+// Portrait: giữ nguyên phone UI của nhánh compose_ui
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PhoneDashboardScreen(
+    uiState: CabinUiState,
+    historyLogs: List<CabinTelemetry>
+) {
     val isWarning = uiState is CabinUiState.Warning
     val backgroundColor by animateColorAsState(
         targetValue = if (isWarning) Color(0xFFFFEBEE) else MaterialTheme.colorScheme.background,
