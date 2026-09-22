@@ -62,6 +62,12 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.ktx)
     implementation(libs.lifecycle.viewmodel.compose)
 
+    // DataStore Preferences
+    implementation(libs.androidx.datastore.preferences)
+
+    // Navigation Compose
+    implementation(libs.androidx.navigation.compose)
+
     // Test
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
