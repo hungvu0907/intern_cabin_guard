@@ -4,8 +4,10 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.example.cabinguard.data.local.CabinTelemetryDao
 import com.example.cabinguard.domain.sensor.CabinSensorEngine
+import com.example.cabinguard.receiver.BatteryLowReceiver
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -30,9 +32,19 @@ class CabinTelemetryService : Service() {
     )
     private var collectJob: Job? = null
 
+    // lazy vì engine chỉ được Hilt inject trong super.onCreate().
+    private val batteryReceiver by lazy { BatteryLowReceiver(engine) }
+
     override fun onCreate() {
         super.onCreate()
         CabinNotification.createChannel(this)
+        ContextCompat.registerReceiver(
+            this,
+            batteryReceiver,
+            BatteryLowReceiver.intentFilter(),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        batteryReceiver.syncInitialState(this)
         Log.d(TAG, "onCreate")
     }
 
@@ -55,6 +67,7 @@ class CabinTelemetryService : Service() {
 
     override fun onDestroy() {
         Log.d(TAG, "onDestroy")
+        unregisterReceiver(batteryReceiver)
         scope.cancel()
         super.onDestroy()
     }
