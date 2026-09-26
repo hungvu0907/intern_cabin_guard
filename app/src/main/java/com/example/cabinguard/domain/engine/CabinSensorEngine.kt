@@ -1,13 +1,15 @@
 package com.example.cabinguard.domain.engine
 
 import com.example.cabinguard.data.local.CabinTelemetry
+import com.example.cabinguard.data.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.shareIn
@@ -17,12 +19,13 @@ import kotlin.random.Random
 
 @Singleton
 class CabinSensorEngine(
+    private val settingsRepository: SettingsRepository,
     dispatcher: CoroutineDispatcher
 ) {
 
-    // Hilt inject constructor không-tham-số; unit test truyền TestDispatcher vào constructor kia.
+    // Hilt inject Settings; unit test truyền TestDispatcher vào constructor kia.
     @Inject
-    constructor() : this(Dispatchers.IO)
+    constructor(settingsRepository: SettingsRepository) : this(settingsRepository, Dispatchers.IO)
 
     // @Volatile: thread đọc flow (IO) thấy ngay giá trị mới do receiver (main) đổi.
     @Volatile
@@ -30,33 +33,37 @@ class CabinSensorEngine(
 
     private val sharingScope = CoroutineScope(SupervisorJob() + dispatcher)
 
-    // Hot SharedFlow: ViewModel + Service collect chung một nguồn — cùng timestamp / isWarning.
-    // WhileSubscribed(0): dừng emit khi không còn collector (test không treo; không tốn pin khi idle).
-    // replay = 1: collector vào sau (bật Service) nhận ngay bản mới nhất.
-    val sensorFlow: SharedFlow<CabinTelemetry> = flow {
+    // Cảm biến thô — isWarning tính sau khi combine với ngưỡng DataStore.
+    private val rawReadings = flow {
         while (true) {
-            val temperature = randomIn(25f, 45f)
-            val pressure = randomIn(980f, 1020f)
-            val co2Level = randomIn(400f, 1200f)
-            val isWarning = temperature > CabinTelemetry.TEMP_WARNING_THRESHOLD
-                || co2Level > CabinTelemetry.CO2_WARNING_THRESHOLD
             emit(
                 CabinTelemetry(
                     timestamp = System.currentTimeMillis(),
-                    temperature = temperature,
-                    pressure = pressure,
-                    co2Level = co2Level,
-                    isWarning = isWarning
+                    temperature = randomIn(25f, 45f),
+                    pressure = randomIn(980f, 1020f),
+                    co2Level = randomIn(400f, 1200f)
                 )
             )
             delay(intervalMs)
         }
     }.flowOn(dispatcher)
-        .shareIn(
-            sharingScope,
-            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 0),
-            replay = 1
-        )
+
+    /**
+     * Hot SharedFlow: ViewModel + Service collect chung một nguồn.
+     * combine ngưỡng Settings — đổi ngưỡng áp dụng ngay, không cần restart app/Service.
+     * WhileSubscribed(0): dừng emit khi không còn collector.
+     * replay = 1: collector vào sau (bật Service) nhận ngay bản mới nhất.
+     */
+    val sensorFlow: SharedFlow<CabinTelemetry> = combine(
+        rawReadings,
+        settingsRepository.thresholds
+    ) { reading, thresholds ->
+        reading.copy(isWarning = thresholds.isWarning(reading.temperature, reading.co2Level))
+    }.shareIn(
+        sharingScope,
+        started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 0),
+        replay = 1
+    )
 
     fun setInterval(ms: Long) {
         intervalMs = ms

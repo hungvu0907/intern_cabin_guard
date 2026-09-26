@@ -6,6 +6,7 @@ import com.example.cabinguard.data.repository.CabinTelemetryRepository
 import com.example.cabinguard.domain.engine.CabinSensorEngine
 import com.example.cabinguard.domain.model.CabinUiState
 import com.example.cabinguard.service.CabinTelemetryService
+import com.example.cabinguard.testutil.FakeSettingsRepository
 import com.example.cabinguard.telemetry
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -16,6 +17,7 @@ import io.mockk.runs
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -54,13 +56,13 @@ class CabinViewModelTest {
 
     @Test
     fun `uiState starts as Loading before any emission`() {
-        val viewModel = CabinViewModel(engine, repository)
+        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
         assertEquals(CabinUiState.Loading, viewModel.uiState.value)
     }
 
     @Test
     fun `uiState is Normal and saves when service is not running`() = runTest {
-        val viewModel = CabinViewModel(engine, repository)
+        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
         val data = telemetry(temperature = 30f, co2Level = 800f)
 
         sensorEvents.emit(data)
@@ -74,7 +76,7 @@ class CabinViewModelTest {
     @Test
     fun `does not save telemetry when service is already running`() = runTest {
         CabinTelemetryService.isRunning = true
-        val viewModel = CabinViewModel(engine, repository)
+        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
         val data = telemetry(temperature = 30f, co2Level = 800f)
 
         sensorEvents.emit(data)
@@ -85,7 +87,7 @@ class CabinViewModelTest {
 
     @Test
     fun `uiState is Warning when temperature exceeds 38C`() = runTest {
-        val viewModel = CabinViewModel(engine, repository)
+        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
         val data = telemetry(temperature = 39f, co2Level = 500f)
 
         sensorEvents.emit(data)
@@ -97,7 +99,7 @@ class CabinViewModelTest {
 
     @Test
     fun `uiState is Warning when CO2 exceeds 1000 ppm`() = runTest {
-        val viewModel = CabinViewModel(engine, repository)
+        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
         val data = telemetry(temperature = 28f, co2Level = 1100f)
 
         sensorEvents.emit(data)
@@ -107,13 +109,40 @@ class CabinViewModelTest {
 
     @Test
     fun `uiState switches from Normal to Warning on next reading`() = runTest {
-        val viewModel = CabinViewModel(engine, repository)
+        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
 
         sensorEvents.emit(telemetry(temperature = 32f, co2Level = 600f))
         assertTrue(viewModel.uiState.value is CabinUiState.Normal)
 
         sensorEvents.emit(telemetry(temperature = 40f, co2Level = 600f))
         assertTrue(viewModel.uiState.value is CabinUiState.Warning)
+    }
+
+    @Test
+    fun `export emits Empty when history has no logs`() = runTest {
+        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
+
+        viewModel.onExportHistory()
+
+        assertEquals(ExportHistoryEvent.Empty, viewModel.exportEvents.first())
+    }
+
+    @Test
+    fun `export emits csv built from getAllLogs`() = runTest {
+        val log = telemetry(temperature = 39.5f, co2Level = 1100f).copy(id = 7, isSynced = true)
+        history.value = listOf(log)
+        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
+
+        viewModel.onExportHistory()
+
+        val event = viewModel.exportEvents.first()
+        assertTrue(event is ExportHistoryEvent.Ready)
+        val csv = (event as ExportHistoryEvent.Ready).csv
+        assertEquals(2, csv.lines().size)
+        assertTrue(csv.startsWith("id,timestamp,temperature,pressure,co2_level,is_warning,is_synced"))
+        assertTrue(csv.contains("39.5"))
+        assertTrue(csv.contains("1100"))
+        assertTrue(csv.contains("true"))
     }
 
 }
