@@ -7,14 +7,18 @@ import com.example.cabinguard.data.local.CabinTelemetry
 import com.example.cabinguard.data.repository.CabinTelemetryRepository
 import com.example.cabinguard.data.repository.SettingsRepository
 import com.example.cabinguard.domain.engine.CabinSensorEngine
+import com.example.cabinguard.domain.export.TelemetryCsvFormatter
 import com.example.cabinguard.domain.model.AlertThresholds
 import com.example.cabinguard.domain.model.CabinUiState
 import com.example.cabinguard.service.CabinTelemetryService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -36,6 +40,10 @@ class CabinViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = AlertThresholds()
     )
+
+    /** [EXP-04][EXP-06] Một lần bấm Xuất: CSV sẵn sàng, hoặc danh sách rỗng. */
+    private val exportEventsChannel = Channel<ExportHistoryEvent>(Channel.BUFFERED)
+    val exportEvents = exportEventsChannel.receiveAsFlow()
 
     /** Lịch sử log từ Room DB — tự cập nhật khi có bản ghi mới */
     val historyLogs: StateFlow<List<CabinTelemetry>> = repository.getAllLogs().stateIn(
@@ -69,4 +77,22 @@ class CabinViewModel @Inject constructor(
             }
         }
     }
+
+    /** Đọc getAllLogs() tại thời điểm bấm — rỗng thì không ghi file. */
+    fun onExportHistory() {
+        viewModelScope.launch {
+            val logs = repository.getAllLogs().first()
+            val event = if (logs.isEmpty()) {
+                ExportHistoryEvent.Empty
+            } else {
+                ExportHistoryEvent.Ready(TelemetryCsvFormatter.format(logs))
+            }
+            exportEventsChannel.send(event)
+        }
+    }
+}
+
+sealed interface ExportHistoryEvent {
+    data object Empty : ExportHistoryEvent
+    data class Ready(val csv: String) : ExportHistoryEvent
 }

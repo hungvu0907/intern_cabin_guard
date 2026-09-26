@@ -10,12 +10,16 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -61,20 +65,41 @@ fun DashboardScreen(
     val historyLogs by viewModel.historyLogs.collectAsState()
     val thresholds by viewModel.thresholds.collectAsState()
     val isAutomotive = LocalAutomotiveMode.current
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel) {
+        viewModel.exportEvents.collect { event ->
+            when (event) {
+                ExportHistoryEvent.Empty ->
+                    snackbarHostState.showSnackbar("Chưa có lịch sử để xuất")
+                is ExportHistoryEvent.Ready -> {
+                    val shared = runCatching { HistoryShare.share(context, event.csv) }
+                    if (shared.isFailure) {
+                        snackbarHostState.showSnackbar("Không xuất được lịch sử")
+                    }
+                }
+            }
+        }
+    }
 
     if (isAutomotive) {
         AutomotiveDashboardScreen(
             uiState = uiState,
             historyLogs = historyLogs,
             thresholds = thresholds,
-            onOpenSettings = onOpenSettings
+            onOpenSettings = onOpenSettings,
+            onExportHistory = viewModel::onExportHistory,
+            snackbarHostState = snackbarHostState
         )
     } else {
         PhoneDashboardScreen(
             uiState = uiState,
             historyLogs = historyLogs,
             thresholds = thresholds,
-            onOpenSettings = onOpenSettings
+            onOpenSettings = onOpenSettings,
+            onExportHistory = viewModel::onExportHistory,
+            snackbarHostState = snackbarHostState
         )
     }
 }
@@ -84,7 +109,9 @@ private fun AutomotiveDashboardScreen(
     uiState: CabinUiState,
     historyLogs: List<CabinTelemetry>,
     thresholds: AlertThresholds,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onExportHistory: () -> Unit,
+    snackbarHostState: SnackbarHostState
 ) {
     Box(
         modifier = Modifier
@@ -93,11 +120,11 @@ private fun AutomotiveDashboardScreen(
     ) {
         when (val state = uiState) {
             is CabinUiState.Loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
@@ -106,6 +133,14 @@ private fun AutomotiveDashboardScreen(
                             color = MaterialTheme.colorScheme.onBackground
                         )
                     }
+                    TextButton(
+                        onClick = onExportHistory,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                    ) {
+                        Text("Xuất CSV")
+                    }
                 }
             }
             is CabinUiState.Normal -> AutomotiveDashboardContent(
@@ -113,16 +148,22 @@ private fun AutomotiveDashboardScreen(
                 isWarning = false,
                 historyLogs = historyLogs,
                 thresholds = thresholds,
-                onOpenSettings = onOpenSettings
+                onOpenSettings = onOpenSettings,
+                onExportHistory = onExportHistory
             )
             is CabinUiState.Warning -> AutomotiveDashboardContent(
                 data = state.data,
                 isWarning = true,
                 historyLogs = historyLogs,
                 thresholds = thresholds,
-                onOpenSettings = onOpenSettings
+                onOpenSettings = onOpenSettings,
+                onExportHistory = onExportHistory
             )
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }
 
@@ -133,7 +174,9 @@ private fun PhoneDashboardScreen(
     uiState: CabinUiState,
     historyLogs: List<CabinTelemetry>,
     thresholds: AlertThresholds,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onExportHistory: () -> Unit,
+    snackbarHostState: SnackbarHostState
 ) {
     val isWarning = uiState is CabinUiState.Warning
     val backgroundColor by animateColorAsState(
@@ -161,6 +204,9 @@ private fun PhoneDashboardScreen(
                     )
                 },
                 actions = {
+                    TextButton(onClick = onExportHistory) {
+                        Text("Xuất CSV", color = topBarTextColor)
+                    }
                     TextButton(onClick = onOpenSettings) {
                         Text("Cài đặt", color = topBarTextColor)
                     }
@@ -170,7 +216,8 @@ private fun PhoneDashboardScreen(
                     titleContentColor = topBarTextColor
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         Box(
             modifier = Modifier

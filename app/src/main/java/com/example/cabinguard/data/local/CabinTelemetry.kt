@@ -31,7 +31,11 @@ data class CabinTelemetry(
     val co2Level: Float = 0f,
 
     @ColumnInfo(name = "is_warning")
-    val isWarning: Boolean = false
+    val isWarning: Boolean = false,
+
+    /** false cho đến khi SyncWorker đẩy lên cloud thành công. */
+    @ColumnInfo(name = "is_synced", defaultValue = "0")
+    val isSynced: Boolean = false
 ) {
     /** Default khi DataStore trống; ngưỡng đang dùng lấy từ Settings. */
     companion object {

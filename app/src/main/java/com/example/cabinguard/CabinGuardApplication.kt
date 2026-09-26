@@ -8,11 +8,13 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.cabinguard.domain.engine.CabinSensorEngine
 import com.example.cabinguard.receiver.BatteryLowReceiver
 import com.example.cabinguard.worker.CleanupWorker
+import com.example.cabinguard.worker.SyncWorker
 import dagger.hilt.android.HiltAndroidApp
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -33,6 +35,7 @@ class CabinGuardApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         scheduleCleanupWork()
+        enqueueCloudSync()
         registerBatteryReceiver()
     }
 
@@ -64,6 +67,24 @@ class CabinGuardApplication : Application(), Configuration.Provider {
             CleanupWorker.UNIQUE_NAME,
             ExistingPeriodicWorkPolicy.KEEP,
             request
+        )
+    }
+
+    /** Đẩy log chưa sync mỗi 15 phút, chỉ khi máy có mạng. KEEP để không xếp chồng. */
+    private fun enqueueCloudSync() {
+        val request = PeriodicWorkRequestBuilder<SyncWorker>(
+            SyncWorker.INTERVAL_MINUTES,
+            TimeUnit.MINUTES,
+        ).setConstraints(
+            Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build(),
+        ).build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            SyncWorker.UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request,
         )
     }
 }

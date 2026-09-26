@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cabinguard.data.local.CabinTelemetry
@@ -54,6 +55,7 @@ fun AutomotiveDashboardContent(
     historyLogs: List<CabinTelemetry>,
     thresholds: AlertThresholds = AlertThresholds(),
     onOpenSettings: () -> Unit = {},
+    onExportHistory: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -139,12 +141,20 @@ fun AutomotiveDashboardContent(
             ) {
                 Text(
                     text = "CabinGuard",
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
-                TextButton(onClick = onOpenSettings) {
-                    Text("Cài đặt")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onExportHistory) {
+                        Text("Xuất CSV")
+                    }
+                    TextButton(onClick = onOpenSettings) {
+                        Text("Cài đặt")
+                    }
                 }
             }
 

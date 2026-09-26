@@ -17,6 +17,7 @@ import io.mockk.runs
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -115,6 +116,33 @@ class CabinViewModelTest {
 
         sensorEvents.emit(telemetry(temperature = 40f, co2Level = 600f))
         assertTrue(viewModel.uiState.value is CabinUiState.Warning)
+    }
+
+    @Test
+    fun `export emits Empty when history has no logs`() = runTest {
+        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
+
+        viewModel.onExportHistory()
+
+        assertEquals(ExportHistoryEvent.Empty, viewModel.exportEvents.first())
+    }
+
+    @Test
+    fun `export emits csv built from getAllLogs`() = runTest {
+        val log = telemetry(temperature = 39.5f, co2Level = 1100f).copy(id = 7, isSynced = true)
+        history.value = listOf(log)
+        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
+
+        viewModel.onExportHistory()
+
+        val event = viewModel.exportEvents.first()
+        assertTrue(event is ExportHistoryEvent.Ready)
+        val csv = (event as ExportHistoryEvent.Ready).csv
+        assertEquals(2, csv.lines().size)
+        assertTrue(csv.startsWith("id,timestamp,temperature,pressure,co2_level,is_warning,is_synced"))
+        assertTrue(csv.contains("39.5"))
+        assertTrue(csv.contains("1100"))
+        assertTrue(csv.contains("true"))
     }
 
 }

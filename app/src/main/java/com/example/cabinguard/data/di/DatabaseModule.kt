@@ -3,6 +3,7 @@ package com.example.cabinguard.data.di
 import android.content.Context
 import androidx.room.Room
 import com.example.cabinguard.data.local.CabinDatabase
+import com.example.cabinguard.data.local.CabinDatabaseMigrations
 import com.example.cabinguard.data.local.CabinTelemetryDao
 import dagger.Module
 import dagger.Provides
@@ -26,8 +27,11 @@ object DatabaseModule {
             CabinDatabase::class.java,
             CabinDatabase.DATABASE_NAME
         )
-            // Sprint: đổi schema (Index) thì xóa DB cũ, không viết Migration.
-            .fallbackToDestructiveMigration(dropAllTables = true)
+            // Giữ log Sprint 1: 1→2 index timestamp, 2→3 thêm is_synced.
+            .addMigrations(
+                CabinDatabaseMigrations.MIGRATION_1_2,
+                CabinDatabaseMigrations.MIGRATION_2_3,
+            )
             .build()
     }
 
