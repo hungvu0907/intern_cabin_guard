@@ -2,10 +2,14 @@ package com.example.cabinguard.data.local
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /** khai báo entity cho bảng cabin_telemetry */
-@Entity(tableName = "cabin_telemetry")
+@Entity(
+    tableName = "cabin_telemetry",
+    indices = [Index(value = ["timestamp"])] // getAllLogs / deleteOlderThan lọc theo timestamp
+)
 data class CabinTelemetry(
 
     /** khai báo khóa chính autoGenerate = true */

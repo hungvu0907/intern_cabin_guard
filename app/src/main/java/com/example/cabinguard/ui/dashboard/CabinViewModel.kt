@@ -9,6 +9,7 @@ import com.example.cabinguard.data.repository.SettingsRepository
 import com.example.cabinguard.domain.engine.CabinSensorEngine
 import com.example.cabinguard.domain.model.AlertThresholds
 import com.example.cabinguard.domain.model.CabinUiState
+import com.example.cabinguard.service.CabinTelemetryService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -60,7 +61,11 @@ class CabinViewModel @Inject constructor(
                 } else {
                     CabinUiState.Normal(telemetry)
                 }
-                repository.saveTelemetry(telemetry)
+
+                // Service đang chạy thì Service là người ghi Room — tránh 2 bản ghi / interval.
+                if (!CabinTelemetryService.isRunning) {
+                    repository.saveTelemetry(telemetry)
+                }
             }
         }
     }
