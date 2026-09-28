@@ -38,6 +38,9 @@ class CabinTelemetryRepository @Inject constructor(
 
     fun getRecentLogs(limit: Int = 50): Flow<List<CabinTelemetry>> = dao.getRecentLogs(limit)
 
+    /** [WDG-03] Bản ghi mới nhất cho widget Home. */
+    fun observeLatest(): Flow<CabinTelemetry?> = dao.observeLatest()
+
     fun getTotalCount(): Flow<Int> = dao.getTotalCount()
 
     /**

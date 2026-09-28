@@ -20,6 +20,10 @@ interface CabinTelemetryDao {
     @Query("SELECT * FROM cabin_telemetry ORDER BY timestamp DESC LIMIT :limit")
     fun getRecentLogs(limit: Int): Flow<List<CabinTelemetry>>
 
+    /** [WDG-03] Một bản ghi mới nhất — widget không gọi DAO trực tiếp. */
+    @Query("SELECT * FROM cabin_telemetry ORDER BY timestamp DESC LIMIT 1")
+    fun observeLatest(): Flow<CabinTelemetry?>
+
     /** Xóa các log cũ hơn thời gian hiện tại */
     @Query("DELETE FROM cabin_telemetry WHERE timestamp < :timestamp")
     suspend fun deleteOlderThan(timestamp: Long)

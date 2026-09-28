@@ -13,6 +13,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.cabinguard.domain.engine.CabinSensorEngine
 import com.example.cabinguard.receiver.BatteryLowReceiver
+import com.example.cabinguard.ui.widget.CabinWidgetRefresher
 import com.example.cabinguard.worker.CleanupWorker
 import com.example.cabinguard.worker.SyncWorker
 import dagger.hilt.android.HiltAndroidApp
@@ -27,6 +28,8 @@ class CabinGuardApplication : Application(), Configuration.Provider {
     // Engine dùng chung (@Singleton) — receiver sẽ đổi chu kỳ đọc của nó khi pin thay đổi.
     @Inject lateinit var sensorEngine: CabinSensorEngine
 
+    @Inject lateinit var widgetRefresher: CabinWidgetRefresher
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -37,6 +40,8 @@ class CabinGuardApplication : Application(), Configuration.Provider {
         scheduleCleanupWork()
         enqueueCloudSync()
         registerBatteryReceiver()
+        // Bản ghi Room mới (Service hoặc ViewModel) làm widget vẽ lại.
+        widgetRefresher.start()
     }
 
     private fun registerBatteryReceiver() {

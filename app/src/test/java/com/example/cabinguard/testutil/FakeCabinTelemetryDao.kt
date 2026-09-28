@@ -31,6 +31,9 @@ class FakeCabinTelemetryDao(
     override fun getRecentLogs(limit: Int): Flow<List<CabinTelemetry>> =
         getAllLogs().map { it.take(limit) }
 
+    override fun observeLatest(): Flow<CabinTelemetry?> =
+        getAllLogs().map { it.firstOrNull() }
+
     override suspend fun deleteOlderThan(timestamp: Long) {
         rows.value = rows.value.filterNot { it.timestamp < timestamp }
     }
