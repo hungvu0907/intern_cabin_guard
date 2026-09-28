@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">CabinGuard</string>
+    <string name="widget_name">CabinGuard</string>
+    <string name="widget_description">Nhiệt độ cabin và trạng thái an toàn hoặc cảnh báo</string>
 </resources>
