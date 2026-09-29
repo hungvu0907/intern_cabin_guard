@@ -1,5 +1,9 @@
 package com.example.cabinguard.ui.dashboard
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -26,6 +30,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,11 +39,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.cabinguard.data.model.CabinTelemetry
 import com.example.cabinguard.domain.sensor.CabinThresholds
@@ -71,6 +77,19 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isExporting by viewModel.isExporting.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    LaunchedEffect(viewModel) {
+        viewModel.exportResults.collect { result ->
+            when (result) {
+                is ExportResult.Ready -> shareCsv(context, result.uri)
+                ExportResult.Empty -> toast(context, "Chưa có log để xuất")
+                ExportResult.Failed -> toast(context, "Xuất CSV thất bại")
+            }
+        }
+    }
+
     DashboardContent(
         uiState = uiState,
         onTogglePause = {
@@ -79,8 +98,23 @@ fun DashboardScreen(
             } else {
                 viewModel.pauseMonitoring()
             }
-        }
+        },
+        isExporting = isExporting,
+        onExportCsv = viewModel::exportCsv
     )
+}
+
+private fun shareCsv(context: Context, uri: Uri) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/csv"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(send, "Chia sẻ lịch sử log"))
+}
+
+private fun toast(context: Context, message: String) {
+    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }
 
 /**
@@ -90,7 +124,9 @@ fun DashboardScreen(
 @Composable
 fun DashboardContent(
     uiState: DashboardUiState,
-    onTogglePause: () -> Unit = {}
+    onTogglePause: () -> Unit = {},
+    isExporting: Boolean = false,
+    onExportCsv: () -> Unit = {}
 ) {
     val background by animateColorAsState(
         targetValue = if (uiState.isWarning) WarningBackground else SafeBackground,
@@ -132,6 +168,8 @@ fun DashboardContent(
             HistoryPane(
                 history = uiState.history,
                 cardColor = cardColor,
+                isExporting = isExporting,
+                onExportCsv = onExportCsv,
                 modifier = Modifier
                     .weight(0.4f)
                     .fillMaxHeight()
@@ -335,15 +373,37 @@ private fun Co2Reading(co2Level: Int) {
 private fun HistoryPane(
     history: List<CabinTelemetry>,
     cardColor: Color,
+    isExporting: Boolean,
+    onExportCsv: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
-        Text(
-            text = "Lịch sử log",
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 18.sp
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Lịch sử log",
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 18.sp
+            )
+            Button(
+                onClick = onExportCsv,
+                enabled = !isExporting,
+                modifier = Modifier.heightIn(min = MinTouchTarget),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = cardColor,
+                    contentColor = Color.White
+                )
+            ) {
+                Text(
+                    text = if (isExporting) "Đang xuất..." else "Xuất CSV",
+                    fontSize = 18.sp
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
