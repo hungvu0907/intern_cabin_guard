@@ -57,6 +57,7 @@ dependencies {
     ksp("androidx.room:room-compiler:2.8.4")
 
     implementation("androidx.work:work-runtime-ktx:2.11.2")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
 
     implementation("com.google.dagger:hilt-android:2.60.1")
     ksp("com.google.dagger:hilt-compiler:2.60.1")

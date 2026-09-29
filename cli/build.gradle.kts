@@ -22,6 +22,7 @@ kotlin {
             kotlin.include("com/example/cabinguard/data/model/CabinTelemetry.kt")
             kotlin.include("com/example/cabinguard/domain/sensor/CabinSensorEngine.kt")
             kotlin.include("com/example/cabinguard/domain/sensor/CabinThresholds.kt")
+            kotlin.include("com/example/cabinguard/domain/sensor/CabinWarningThresholds.kt")
         }
     }
 }
