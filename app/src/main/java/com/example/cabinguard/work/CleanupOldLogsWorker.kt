@@ -24,8 +24,8 @@ class CleanupOldLogsWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         val cutoff = System.currentTimeMillis() -
             TimeUnit.HOURS.toMillis(RETENTION_HOURS)
-        val deleted = dao.deleteOlderThan(cutoff)
-        Log.d(TAG, "deleted $deleted rows older than ${RETENTION_HOURS}h")
+        val deleted = dao.deleteSyncedOlderThan(cutoff)
+        Log.d(TAG, "deleted $deleted synced rows older than ${RETENTION_HOURS}h")
         return Result.success()
     }
 

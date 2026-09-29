@@ -7,8 +7,8 @@ import com.example.cabinguard.data.model.CabinTelemetry
 
 @Database(
     entities = [CabinTelemetry::class],
-    version = 1,
-    exportSchema = false
+    version = 2,
+    exportSchema = true
 )
 abstract class CabinDatabase :
     RoomDatabase() {

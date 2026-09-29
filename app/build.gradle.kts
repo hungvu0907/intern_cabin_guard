@@ -15,6 +15,13 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    sourceSets {
+        // MigrationTestHelper đọc schema JSON đã export từ assets của androidTest.
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
 
     buildFeatures {
@@ -67,4 +74,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     testImplementation("junit:junit:4.13.2")
+
+    androidTestImplementation("androidx.room:room-testing:2.8.4")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
 }

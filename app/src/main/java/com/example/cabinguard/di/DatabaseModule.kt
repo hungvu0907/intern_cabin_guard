@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.cabinguard.data.local.CabinDatabase
 import com.example.cabinguard.data.local.CabinTelemetryDao
+import com.example.cabinguard.data.local.MIGRATION_1_2
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -24,7 +25,9 @@ object DatabaseModule {
             context,
             CabinDatabase::class.java,
             "cabin_guard.db"
-        ).build()
+        )
+            .addMigrations(MIGRATION_1_2)
+            .build()
     }
 
     @Provides
