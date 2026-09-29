@@ -18,9 +18,14 @@ class CabinSensorEngine @Inject constructor() {
 
     private val scanInterval =
         MutableStateFlow(CabinThresholds.SCAN_INTERVAL_NORMAL_MS)
+    private val warningThresholdConfig =
+        MutableStateFlow(CabinWarningThresholds())
 
     val scanIntervalMillis: Long
         get() = scanInterval.value
+
+    val warningThresholds: CabinWarningThresholds
+        get() = warningThresholdConfig.value
 
     fun setBatteryLow(batteryLow: Boolean) {
         scanInterval.value = if (batteryLow) {
@@ -28,6 +33,10 @@ class CabinSensorEngine @Inject constructor() {
         } else {
             CabinThresholds.SCAN_INTERVAL_NORMAL_MS
         }
+    }
+
+    fun setWarningThresholds(thresholds: CabinWarningThresholds) {
+        warningThresholdConfig.value = thresholds
     }
 
     fun observeTelemetry(): Flow<CabinTelemetry> = flow {
@@ -46,12 +55,13 @@ class CabinSensorEngine @Inject constructor() {
                 CabinThresholds.CO2_MAX_PPM + 1
             )
 
+            val currentThresholds = warningThresholdConfig.value
             val telemetry = CabinTelemetry(
                 timestamp = timestamp,
                 temperature = temperature,
                 pressure = pressure,
                 co2Level = co2Level,
-                isWarning = CabinThresholds.isWarning(temperature, co2Level)
+                isWarning = currentThresholds.isWarning(temperature, co2Level)
             )
 
             emit(telemetry)
