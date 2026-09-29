@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.example.cabinguard.work.CleanupOldLogsWorker
+import com.example.cabinguard.work.SyncWorker
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -18,6 +19,7 @@ class CabinGuardApplication :
     override fun onCreate() {
         super.onCreate()
         CleanupOldLogsWorker.enqueue(this)
+        SyncWorker.enqueue(this)
     }
 
     override val workManagerConfiguration: Configuration
