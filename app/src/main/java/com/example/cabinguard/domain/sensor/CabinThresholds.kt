@@ -27,6 +27,4 @@ object CabinThresholds {
     /** Chu kỳ quét khi pin yếu. */
     const val SCAN_INTERVAL_BATTERY_LOW_MS = 5_000L
 
-    fun isWarning(temperature: Double, co2Level: Int): Boolean =
-        temperature > TEMPERATURE_WARNING_CELSIUS || co2Level > CO2_WARNING_PPM
 }

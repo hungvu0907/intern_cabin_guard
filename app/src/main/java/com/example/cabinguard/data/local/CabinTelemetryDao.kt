@@ -79,23 +79,34 @@ interface CabinTelemetryDao {
         """
         UPDATE cabin_telemetry
         SET isSynced = 1
-        WHERE id IN (:ids)
+        WHERE id IN (:ids) AND isSynced = 0
         """
     )
     suspend fun markSynced(
         ids: List<Long>
-    )
+    ): Int
 
-    // Chỉ xóa bản ghi đã lên cloud; mất mạng lâu hơn thời gian giữ log
-    // cũng không được làm rớt dữ liệu chưa sync (US-06).
+    @Query("SELECT COUNT(*) FROM cabin_telemetry WHERE isSynced = 0 AND timestamp < :cutoff")
+    suspend fun countUnsyncedOlderThan(cutoff: Long): Int
+
+    // A hard age limit deliberately trades old offline logs for bounded retention.
     @Query(
         """
         DELETE FROM cabin_telemetry
-        WHERE timestamp < :cutoff
-        AND isSynced = 1
+        WHERE (timestamp < :syncedCutoff AND isSynced = 1)
+        OR timestamp < :hardCutoff
         """
     )
-    suspend fun deleteSyncedOlderThan(
-        cutoff: Long
+    suspend fun deleteExpired(
+        syncedCutoff: Long,
+        hardCutoff: Long
     ): Int
+
+    @Transaction
+    suspend fun cleanup(syncedCutoff: Long, hardCutoff: Long): CleanupResult {
+        val unsynced = countUnsyncedOlderThan(hardCutoff)
+        return CleanupResult(deleteExpired(syncedCutoff, hardCutoff), unsynced)
+    }
 }
+
+data class CleanupResult(val deleted: Int, val unsyncedDeleted: Int)

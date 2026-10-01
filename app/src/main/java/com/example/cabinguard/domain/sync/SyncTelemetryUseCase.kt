@@ -23,13 +23,14 @@ class SyncTelemetryUseCase @Inject constructor(
             val batch = dao.getUnsynced(BATCH_SIZE)
             if (batch.isEmpty()) return synced
             remote.upsert(batch)
-            dao.markSynced(batch.map { it.id })
-            synced += batch.size
+            val updated = dao.markSynced(batch.map { it.id })
+            check(updated > 0) { "Sync batch made no progress" }
+            synced += updated
         }
     }
 
     companion object {
-        /** Giới hạn một batch write của Firestore. */
+        /** Bound each upload; remote implementations may impose batch limits. */
         const val BATCH_SIZE = 500
     }
 }

@@ -7,6 +7,9 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.cabinguard.data.local.CabinTelemetryDao
 import com.example.cabinguard.domain.sensor.CabinSensorEngine
+import com.example.cabinguard.domain.sensor.TelemetryRecorder
+import com.example.cabinguard.data.settings.ThresholdSettingsRepository
+import com.example.cabinguard.widget.CabinWidgetUpdater
 import com.example.cabinguard.receiver.BatteryLowReceiver
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -26,6 +29,12 @@ class CabinTelemetryService : Service() {
 
     @Inject
     lateinit var engine: CabinSensorEngine
+
+    @Inject
+    lateinit var thresholds: ThresholdSettingsRepository
+
+    @Inject
+    lateinit var widgetUpdater: CabinWidgetUpdater
 
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO
@@ -80,14 +89,17 @@ class CabinTelemetryService : Service() {
         if (collectJob?.isActive == true) return
         collectJob = scope.launch {
             Log.d(TAG, "collecting telemetry")
-            engine.observeTelemetry().collect { telemetry ->
-                dao.insert(telemetry)
+            val recorder = TelemetryRecorder(dao)
+            engine.observeSamples(thresholds.thresholds).collect { sample ->
+                val telemetry = sample.telemetry
+                recorder.record(sample)
                 val count = dao.observeCount().first()
                 CabinNotification.notify(
                     context = this@CabinTelemetryService,
                     recordCount = count,
                     isWarning = telemetry.isWarning
                 )
+                widgetUpdater.requestUpdate(telemetry.isWarning)
             }
         }
     }

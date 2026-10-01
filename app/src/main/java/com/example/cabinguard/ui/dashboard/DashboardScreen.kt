@@ -9,6 +9,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,16 +28,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.cabinguard.ui.settings.SettingsScreen
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,8 +45,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -88,7 +85,7 @@ fun DashboardScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isExporting by viewModel.isExporting.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var showThresholdDialog by remember { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         viewModel.exportResults.collect { result ->
@@ -98,6 +95,11 @@ fun DashboardScreen(
                 ExportResult.Failed -> toast(context, "Xuất CSV thất bại")
             }
         }
+    }
+
+    if (showSettings) {
+        SettingsScreen(onBack = { showSettings = false })
+        return
     }
 
     DashboardContent(
@@ -111,16 +113,9 @@ fun DashboardScreen(
         },
         isExporting = isExporting,
         onExportCsv = viewModel::exportCsv,
-        onEditThresholds = { showThresholdDialog = true }
+        onEditThresholds = { showSettings = true }
     )
 
-    if (showThresholdDialog) {
-        ThresholdSettingsDialog(
-            current = uiState.warningThresholds,
-            onDismiss = { showThresholdDialog = false },
-            onSave = viewModel::updateWarningThresholds
-        )
-    }
 }
 
 private fun shareCsv(context: Context, uri: Uri) {
@@ -157,6 +152,25 @@ fun DashboardContent(
         label = "dashboard-card"
     )
 
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth < 840.dp || maxHeight < 480.dp) {
+            CompactDashboard(uiState, background, cardColor, onTogglePause, isExporting, onExportCsv, onEditThresholds)
+        } else {
+            WideDashboard(uiState, background, cardColor, onTogglePause, isExporting, onExportCsv, onEditThresholds)
+        }
+    }
+}
+
+@Composable
+private fun WideDashboard(
+    uiState: DashboardUiState,
+    background: Color,
+    cardColor: Color,
+    onTogglePause: () -> Unit,
+    isExporting: Boolean,
+    onExportCsv: () -> Unit,
+    onEditThresholds: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -200,6 +214,42 @@ fun DashboardContent(
     }
 }
 
+/** One scrolling surface avoids nested unbounded history lists on small screens. */
+@Composable
+private fun CompactDashboard(
+    uiState: DashboardUiState,
+    background: Color,
+    cardColor: Color,
+    onTogglePause: () -> Unit,
+    isExporting: Boolean,
+    onExportCsv: () -> Unit,
+    onEditThresholds: () -> Unit
+) {
+    LazyColumn(Modifier.fillMaxSize().background(background).safeDrawingPadding(),
+        contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Text("CabinGuard", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text(if (uiState.isWarning) "CẢNH BÁO" else "Cabin an toàn", color = if (uiState.isWarning) WarningAccent else SafeAccent)
+            Text("Ngưỡng: %.1f °C · %d ppm".format(uiState.warningThresholds.temperatureCelsius, uiState.warningThresholds.co2Ppm), color = Color.White)
+            Text("Sync giả lập trên thiết bị · ${uiState.unsyncedCount} log chờ sync", color = Color.White.copy(alpha = 0.7f))
+        }
+        item { Button(onClick = onEditThresholds, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Chỉnh ngưỡng") } }
+        item { Button(onClick = onTogglePause, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (uiState.isPaused) "Tiếp tục" else "Tạm dừng hiển thị") } }
+        item {
+            uiState.latest?.let { row ->
+                Column(Modifier.fillMaxWidth().background(cardColor, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Nhiệt độ: %.1f °C".format(row.temperature), color = Color.White, fontSize = 24.sp)
+                    Text("Áp suất: %.0f hPa".format(row.pressure), color = Color.White, fontSize = 24.sp)
+                    Text("CO₂: ${row.co2Level} ppm", color = Color.White, fontSize = 24.sp)
+                }
+            } ?: Text("Đang đọc cảm biến...", color = Color.White)
+        }
+        item { Button(onClick = onExportCsv, enabled = !isExporting, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (isExporting) "Đang xuất..." else "Xuất CSV") } }
+        item { Text("Lịch sử log", color = Color.White, fontSize = 18.sp) }
+        items(uiState.history, key = { it.id }) { HistoryRow(it, cardColor) }
+    }
+}
+
 @Composable
 private fun DashboardHeader(
     uiState: DashboardUiState,
@@ -213,6 +263,7 @@ private fun DashboardHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
+            Text("Sync giả lập · ${uiState.unsyncedCount} log chờ sync", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
             Text(
                 text = "CabinGuard",
                 color = Color.White,
@@ -421,81 +472,6 @@ private fun Co2Reading(
             fontSize = 14.sp
         )
     }
-}
-
-@Composable
-private fun ThresholdSettingsDialog(
-    current: CabinWarningThresholds,
-    onDismiss: () -> Unit,
-    onSave: (CabinWarningThresholds) -> Unit
-) {
-    var temperatureText by remember(current) {
-        mutableStateOf(current.temperatureCelsius.toString())
-    }
-    var co2Text by remember(current) { mutableStateOf(current.co2Ppm.toString()) }
-    var errorText by remember { mutableStateOf<String?>(null) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Ngưỡng cảnh báo") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    "Nhiệt độ ${CabinThresholds.TEMPERATURE_MIN_CELSIUS.toInt()}–" +
-                        "${CabinThresholds.TEMPERATURE_MAX_CELSIUS.toInt()} °C; " +
-                        "CO2 ${CabinThresholds.CO2_MIN_PPM}–${CabinThresholds.CO2_MAX_PPM} ppm"
-                )
-                OutlinedTextField(
-                    value = temperatureText,
-                    onValueChange = {
-                        temperatureText = it
-                        errorText = null
-                    },
-                    label = { Text("Nhiệt độ (°C)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                )
-                OutlinedTextField(
-                    value = co2Text,
-                    onValueChange = {
-                        co2Text = it
-                        errorText = null
-                    },
-                    label = { Text("CO2 (ppm)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-                errorText?.let { message ->
-                    Text(message, color = MaterialTheme.colorScheme.error)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    when (val result = parseWarningThresholdInput(temperatureText, co2Text)) {
-                        is ThresholdInputResult.Valid -> {
-                            onSave(result.thresholds)
-                            onDismiss()
-                        }
-                        ThresholdInputResult.InvalidNumber -> {
-                            errorText = "Vui lòng nhập số hợp lệ"
-                        }
-                        ThresholdInputResult.OutOfRange -> {
-                            errorText = "Ngưỡng nằm ngoài dải cảm biến"
-                        }
-                    }
-                }
-            ) {
-                Text("Lưu")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Hủy")
-            }
-        }
-    )
 }
 
 @Composable

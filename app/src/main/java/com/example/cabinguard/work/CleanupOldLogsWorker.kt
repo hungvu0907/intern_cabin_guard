@@ -22,10 +22,11 @@ class CleanupOldLogsWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val cutoff = System.currentTimeMillis() -
+        val now = System.currentTimeMillis()
+        val cutoff = now -
             TimeUnit.HOURS.toMillis(RETENTION_HOURS)
-        val deleted = dao.deleteSyncedOlderThan(cutoff)
-        Log.d(TAG, "deleted $deleted synced rows older than ${RETENTION_HOURS}h")
+        val result = dao.cleanup(cutoff, now - TimeUnit.DAYS.toMillis(7))
+        Log.d(TAG, "deleted ${result.deleted} rows; ${result.unsyncedDeleted} unsynced rows exceeded 7 days")
         return Result.success()
     }
 

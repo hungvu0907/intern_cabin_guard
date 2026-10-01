@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.cabinguard.data.export.CsvExporter
 import com.example.cabinguard.data.local.CabinTelemetryDao
 import com.example.cabinguard.data.settings.ThresholdSettingsRepository
-import com.example.cabinguard.domain.sensor.CabinWarningThresholds
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
@@ -35,20 +34,23 @@ class DashboardViewModel @Inject constructor(
         telemetryDao.observeLatest(),
         telemetryDao.observeAll(),
         isPaused,
-        thresholdSettings.thresholds
-    ) { latest, history, paused, thresholds ->
+        thresholdSettings.thresholds,
+        telemetryDao.observeUnsyncedCount()
+    ) { latest, history, paused, thresholds, unsynced ->
         DashboardUiState(
             latest = latest,
             history = history,
             isPaused = paused,
-            warningThresholds = thresholds
+            warningThresholds = thresholds,
+            unsyncedCount = unsynced
         )
     }.scan(DashboardUiState()) { previous, current ->
         // Đang pause thì giữ nguyên số liệu đang hiển thị, Service vẫn ghi Room.
         if (current.isPaused) {
             previous.copy(
                 isPaused = true,
-                warningThresholds = current.warningThresholds
+                warningThresholds = current.warningThresholds,
+                unsyncedCount = current.unsyncedCount
             )
         } else {
             current
@@ -94,11 +96,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    fun updateWarningThresholds(thresholds: CabinWarningThresholds) {
-        viewModelScope.launch {
-            thresholdSettings.update(thresholds)
-        }
-    }
 }
 
 sealed interface ExportResult {

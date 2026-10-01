@@ -8,8 +8,6 @@ import com.example.cabinguard.data.local.CabinTelemetryDao
 import com.example.cabinguard.domain.export.TelemetryCsvWriter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -30,14 +28,8 @@ class CsvExporter @Inject constructor(
         val rows = dao.getAllLogs()
         if (rows.isEmpty()) return@withContext null
 
-        val dir = File(context.cacheDir, EXPORT_DIR).apply { mkdirs() }
-        // Chỉ giữ file mới nhất để cache không phình sau nhiều lần xuất.
-        dir.listFiles()?.forEach { it.delete() }
-
-        val file = File(dir, "cabin_log_${LocalDateTime.now().format(FILE_TIME)}.csv")
-        file.bufferedWriter(Charsets.UTF_8).use { writer ->
-            // BOM để Excel nhận đúng UTF-8.
-            writer.write(UTF8_BOM)
+        val dir = File(context.cacheDir, EXPORT_DIR)
+        val file = ExportFiles.write(dir, System.currentTimeMillis()) { writer ->
             TelemetryCsvWriter.write(rows, writer)
         }
         Log.d(TAG, "exported ${rows.size} rows to ${file.name}")
@@ -47,10 +39,8 @@ class CsvExporter @Inject constructor(
 
     private companion object {
         const val TAG = "CsvExporter"
-        const val UTF8_BOM = 0xFEFF
 
         /** Phải khớp path trong res/xml/file_paths.xml. */
         const val EXPORT_DIR = "exports"
-        val FILE_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
     }
 }
