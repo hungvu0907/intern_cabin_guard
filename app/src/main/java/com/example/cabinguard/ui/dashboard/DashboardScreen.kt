@@ -310,7 +310,7 @@ private fun DashboardContent(
             items = historyLogs,
             key = { it.id }
         ) { log ->
-            LogHistoryItem(log = log, thresholds = thresholds)
+            LogHistoryItem(log = log)
         }
     }
 }
@@ -353,7 +353,7 @@ private fun ServiceControlRow() {
 }
 
 @Composable
-private fun LogHistoryItem(log: CabinTelemetry, thresholds: AlertThresholds) {
+private fun LogHistoryItem(log: CabinTelemetry) {
     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     val timeText = timeFormat.format(Date(log.timestamp))
 
@@ -382,13 +382,13 @@ private fun LogHistoryItem(log: CabinTelemetry, thresholds: AlertThresholds) {
             Text(
                 text = "${String.format("%.1f", log.temperature)}°C",
                 fontWeight = FontWeight.Medium,
-                color = if (log.temperature > thresholds.tempThreshold)
+                color = if (log.isWarning)
                     Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = "${String.format("%.0f", log.co2Level)} ppm",
                 fontWeight = FontWeight.Medium,
-                color = if (log.co2Level > thresholds.co2Threshold)
+                color = if (log.isWarning)
                     Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface
             )
             Text(

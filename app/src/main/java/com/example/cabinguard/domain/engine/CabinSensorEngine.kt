@@ -2,6 +2,7 @@ package com.example.cabinguard.domain.engine
 
 import com.example.cabinguard.data.local.CabinTelemetry
 import com.example.cabinguard.data.repository.SettingsRepository
+import com.example.cabinguard.domain.model.AlertThresholds
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -9,10 +10,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
@@ -33,7 +35,14 @@ class CabinSensorEngine(
 
     private val sharingScope = CoroutineScope(SupervisorJob() + dispatcher)
 
-    // Cảm biến thô — isWarning tính sau khi combine với ngưỡng DataStore.
+    /** Latest thresholds are state, not another source of sensor emissions. */
+    private val thresholds = settingsRepository.thresholds.stateIn(
+        scope = sharingScope,
+        started = SharingStarted.Eagerly,
+        initialValue = AlertThresholds(),
+    )
+
+    // Cảm biến thô — isWarning được tính khi từng reading mới được phát.
     private val rawReadings = flow {
         while (true) {
             emit(
@@ -50,15 +59,15 @@ class CabinSensorEngine(
 
     /**
      * Hot SharedFlow: ViewModel + Service collect chung một nguồn.
-     * combine ngưỡng Settings — đổi ngưỡng áp dụng ngay, không cần restart app/Service.
+     * Ngưỡng Settings mới áp dụng cho reading kế tiếp, không phát lại reading cũ.
      * WhileSubscribed(0): dừng emit khi không còn collector.
      * replay = 1: collector vào sau (bật Service) nhận ngay bản mới nhất.
      */
-    val sensorFlow: SharedFlow<CabinTelemetry> = combine(
-        rawReadings,
-        settingsRepository.thresholds
-    ) { reading, thresholds ->
-        reading.copy(isWarning = thresholds.isWarning(reading.temperature, reading.co2Level))
+    val sensorFlow: SharedFlow<CabinTelemetry> = rawReadings.map { reading ->
+        val currentThresholds = thresholds.value
+        reading.copy(
+            isWarning = currentThresholds.isWarning(reading.temperature, reading.co2Level)
+        )
     }.shareIn(
         sharingScope,
         started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 0),
