@@ -31,7 +31,7 @@ class CabinTelemetryRepositorySyncTest {
         assertEquals(1, cloud.stored.size)
         assertEquals(30f, cloud.stored.getValue(1).temperature)
         assertTrue(dao.snapshot().single { it.id == 1L }.isSynced)
-        assertTrue(dao.getUnsynced().isEmpty())
+        assertTrue(dao.getUnsynced(200).isEmpty())
     }
 
     @Test
@@ -73,6 +73,40 @@ class CabinTelemetryRepositorySyncTest {
 
         assertTrue(outcome is CloudSyncOutcome.NothingToSync)
         assertEquals(0, cloud.upsertCalls)
+    }
+
+    @Test
+    fun `markSynced failure after upload remains retryable and cloud stays idempotent`() = runTest {
+        val dao = FakeCabinTelemetryDao(listOf(sample(id = 8), sample(id = 9))).apply {
+            failMarkSyncedAfterFirst = IOException("database write failed")
+        }
+        val cloud = FakeTelemetryCloudApi()
+        val repository = CabinTelemetryRepository(dao, cloud)
+
+        val first = repository.syncPendingToCloud()
+        assertTrue(first is CloudSyncOutcome.Failed)
+        assertEquals(2, cloud.stored.size)
+        assertFalse(dao.snapshot().single { it.id == 9L }.isSynced)
+
+        dao.failMarkSyncedAfterFirst = null
+        val second = repository.syncPendingToCloud()
+
+        assertTrue(second is CloudSyncOutcome.Success)
+        assertEquals(2, cloud.stored.size)
+        assertTrue(dao.snapshot().all { it.isSynced })
+    }
+
+    @Test
+    fun `sync processes at most one bounded batch`() = runTest {
+        val rows = (1L..250L).map { id -> sample(id = id) }
+        val dao = FakeCabinTelemetryDao(rows)
+        val cloud = FakeTelemetryCloudApi()
+        val repository = CabinTelemetryRepository(dao, cloud)
+
+        val outcome = repository.syncPendingToCloud()
+
+        assertEquals(200, (outcome as CloudSyncOutcome.Success).count)
+        assertEquals(50, dao.getUnsynced(200).size)
     }
 
     private fun sample(

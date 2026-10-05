@@ -12,19 +12,20 @@ object TelemetryCsvFormatter {
 
     fun format(logs: List<CabinTelemetry>): String {
         if (logs.isEmpty()) return HEADER
-        val rows = logs.joinToString(separator = "\n") { log ->
-            listOf(
-                log.id.toString(),
-                log.timestamp.toString(),
-                log.temperature.toString(),
-                log.pressure.toString(),
-                log.co2Level.toString(),
-                log.isWarning.toString(),
-                log.isSynced.toString(),
-            ).joinToString(separator = ",") { cell(it) }
-        }
+        val rows = logs.joinToString(separator = "\n", transform = ::formatRow)
         return "$HEADER\n$rows"
     }
+
+    /** Tạo đúng một dòng nhỏ để exporter có thể ghi streaming. */
+    fun formatRow(log: CabinTelemetry): String = listOf(
+        log.id.toString(),
+        log.timestamp.toString(),
+        log.temperature.toString(),
+        log.pressure.toString(),
+        log.co2Level.toString(),
+        log.isWarning.toString(),
+        log.isSynced.toString(),
+    ).joinToString(separator = ",") { cell(it) }
 
     /** Bọc ô nếu giá trị có dấu phẩy / ngoặc kép / xuống dòng. */
     private fun cell(value: String): String {

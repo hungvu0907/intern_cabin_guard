@@ -77,7 +77,15 @@ class CabinGuardApplication : Application(), Configuration.Provider {
 
     /** Đẩy log chưa sync mỗi 15 phút, chỉ khi máy có mạng. KEEP để không xếp chồng. */
     private fun enqueueCloudSync() {
-        val request = PeriodicWorkRequestBuilder<SyncWorker>(
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            SyncWorker.UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            buildSyncWorkRequest(),
+        )
+    }
+
+    companion object {
+        fun buildSyncWorkRequest() = PeriodicWorkRequestBuilder<SyncWorker>(
             SyncWorker.INTERVAL_MINUTES,
             TimeUnit.MINUTES,
         ).setConstraints(
@@ -85,11 +93,5 @@ class CabinGuardApplication : Application(), Configuration.Provider {
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build(),
         ).build()
-
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            SyncWorker.UNIQUE_WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            request,
-        )
     }
 }

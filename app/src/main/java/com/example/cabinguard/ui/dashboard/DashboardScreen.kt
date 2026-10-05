@@ -51,6 +51,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.Manifest
 import android.os.Build
+import android.util.Log
 import com.example.cabinguard.service.CabinTelemetryService
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -73,9 +74,13 @@ fun DashboardScreen(
             when (event) {
                 ExportHistoryEvent.Empty ->
                     snackbarHostState.showSnackbar("Chưa có lịch sử để xuất")
+                ExportHistoryEvent.Failed ->
+                    snackbarHostState.showSnackbar("Không xuất được lịch sử")
                 is ExportHistoryEvent.Ready -> {
-                    val shared = runCatching { HistoryShare.share(context, event.csv) }
-                    if (shared.isFailure) {
+                    try {
+                        HistoryShare.share(context, event.file)
+                    } catch (error: Exception) {
+                        Log.e("Dashboard", "Không thể mở bảng chia sẻ CSV", error)
                         snackbarHostState.showSnackbar("Không xuất được lịch sử")
                     }
                 }
@@ -357,7 +362,7 @@ private fun DashboardContent(
             items = historyLogs,
             key = { it.id }
         ) { log ->
-            LogHistoryItem(log = log, thresholds = thresholds)
+            LogHistoryItem(log = log)
         }
     }
 }
@@ -400,7 +405,7 @@ private fun ServiceControlRow() {
 }
 
 @Composable
-private fun LogHistoryItem(log: CabinTelemetry, thresholds: AlertThresholds) {
+private fun LogHistoryItem(log: CabinTelemetry) {
     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     val timeText = timeFormat.format(Date(log.timestamp))
 
@@ -429,13 +434,13 @@ private fun LogHistoryItem(log: CabinTelemetry, thresholds: AlertThresholds) {
             Text(
                 text = "${String.format("%.1f", log.temperature)}°C",
                 fontWeight = FontWeight.Medium,
-                color = if (log.temperature > thresholds.tempThreshold)
+                color = if (log.isWarning)
                     Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = "${String.format("%.0f", log.co2Level)} ppm",
                 fontWeight = FontWeight.Medium,
-                color = if (log.co2Level > thresholds.co2Threshold)
+                color = if (log.isWarning)
                     Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface
             )
             Text(

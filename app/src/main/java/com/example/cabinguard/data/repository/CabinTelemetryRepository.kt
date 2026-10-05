@@ -25,16 +25,19 @@ class CabinTelemetryRepository @Inject constructor(
         dao.insert(telemetry)
     }
 
-    /**
-     * Xóa toàn bộ log cũ hơn [hours] giờ.
-     * Được gọi bởi: CleanupWorker (WorkManager) định kỳ mỗi 24h.
-     */
-    suspend fun deleteLogsOlderThan(hours: Long = 24) {
-        val cutoffTimestamp = System.currentTimeMillis() - TimeUnit.HOURS.toMillis(hours)
-        dao.deleteOlderThan(cutoffTimestamp)
+    suspend fun cleanupLogs(
+        syncedRetentionHours: Long = 24,
+        hardLimitHours: Long = 24 * 7,
+    ) {
+        val now = System.currentTimeMillis()
+        dao.deleteSyncedOlderThan(now - TimeUnit.HOURS.toMillis(syncedRetentionHours))
+        dao.deleteOlderThanHardLimit(now - TimeUnit.HOURS.toMillis(hardLimitHours))
     }
 
     fun getAllLogs(): Flow<List<CabinTelemetry>> = dao.getAllLogs()
+
+    suspend fun getLogsPage(limit: Int, offset: Int): List<CabinTelemetry> =
+        dao.getLogsPage(limit, offset)
 
     fun getRecentLogs(limit: Int = 50): Flow<List<CabinTelemetry>> = dao.getRecentLogs(limit)
 
@@ -49,13 +52,11 @@ class CabinTelemetryRepository @Inject constructor(
      * với các dòng chưa mark (lần sau ghi đè cùng id).
      */
     suspend fun syncPendingToCloud(): CloudSyncOutcome {
-        val pending = dao.getUnsynced()
+        val pending = dao.getUnsynced(SYNC_BATCH_SIZE)
         if (pending.isEmpty()) return CloudSyncOutcome.NothingToSync
         return try {
             cloudApi.upsertAll(pending)
-            pending.map { it.id }
-                .chunked(MARK_SYNCED_CHUNK)
-                .forEach { chunk -> dao.markSynced(chunk) }
+            dao.markSynced(pending.map { it.id })
             CloudSyncOutcome.Success(pending.size)
         } catch (e: CancellationException) {
             throw e
@@ -65,6 +66,6 @@ class CabinTelemetryRepository @Inject constructor(
     }
 
     private companion object {
-        const val MARK_SYNCED_CHUNK = 500
+        const val SYNC_BATCH_SIZE = 200
     }
 }

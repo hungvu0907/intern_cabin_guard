@@ -86,16 +86,23 @@ class CabinSensorEngineTest {
     }
 
     @Test
-    fun `changing threshold updates isWarning on next emit`() = runTest {
+    fun `changing threshold does not re-emit the previous reading`() = runTest {
         val fake = FakeSettingsRepository(AlertThresholds(tempThreshold = 50f, co2Threshold = 2000f))
         val engine = engine(fake)
         val collected = mutableListOf<CabinTelemetry>()
         backgroundScope.launch { engine.sensorFlow.collect { collected.add(it) } }
         runCurrent()
+        assertEquals(1, collected.size)
         assertFalse(collected.last().isWarning)
 
         fake.emit(AlertThresholds(tempThreshold = 20f, co2Threshold = 100f))
         runCurrent()
+
+        assertEquals("threshold changes must not create a duplicate reading", 1, collected.size)
+
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(2, collected.size)
         assertTrue(collected.last().isWarning)
     }
 

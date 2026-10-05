@@ -3,31 +3,33 @@ package com.example.cabinguard.ui.dashboard
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cabinguard.data.export.TelemetryCsvExporter
 import com.example.cabinguard.data.local.CabinTelemetry
 import com.example.cabinguard.data.repository.CabinTelemetryRepository
 import com.example.cabinguard.data.repository.SettingsRepository
 import com.example.cabinguard.domain.engine.CabinSensorEngine
-import com.example.cabinguard.domain.export.TelemetryCsvFormatter
 import com.example.cabinguard.domain.model.AlertThresholds
 import com.example.cabinguard.domain.model.CabinUiState
 import com.example.cabinguard.service.CabinTelemetryService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
 class CabinViewModel @Inject constructor(
     private val sensorEngine: CabinSensorEngine,
     private val repository: CabinTelemetryRepository,
-    settingsRepository: SettingsRepository
+    settingsRepository: SettingsRepository,
+    private val csvExporter: TelemetryCsvExporter,
 ) : ViewModel() {
 
     /** UI State hiện tại — mặc định Loading khi chưa có data */
@@ -46,7 +48,7 @@ class CabinViewModel @Inject constructor(
     val exportEvents = exportEventsChannel.receiveAsFlow()
 
     /** Lịch sử log từ Room DB — tự cập nhật khi có bản ghi mới */
-    val historyLogs: StateFlow<List<CabinTelemetry>> = repository.getAllLogs().stateIn(
+    val historyLogs: StateFlow<List<CabinTelemetry>> = repository.getRecentLogs().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
@@ -78,21 +80,29 @@ class CabinViewModel @Inject constructor(
         }
     }
 
-    /** Đọc getAllLogs() tại thời điểm bấm — rỗng thì không ghi file. */
     fun onExportHistory() {
         viewModelScope.launch {
-            val logs = repository.getAllLogs().first()
-            val event = if (logs.isEmpty()) {
-                ExportHistoryEvent.Empty
-            } else {
-                ExportHistoryEvent.Ready(TelemetryCsvFormatter.format(logs))
+            val event = try {
+                csvExporter.export()
+                    ?.let(ExportHistoryEvent::Ready)
+                    ?: ExportHistoryEvent.Empty
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.e(TAG, "Không thể xuất CSV", error)
+                ExportHistoryEvent.Failed
             }
             exportEventsChannel.send(event)
         }
+    }
+
+    private companion object {
+        const val TAG = "CabinVM"
     }
 }
 
 sealed interface ExportHistoryEvent {
     data object Empty : ExportHistoryEvent
-    data class Ready(val csv: String) : ExportHistoryEvent
+    data object Failed : ExportHistoryEvent
+    data class Ready(val file: File) : ExportHistoryEvent
 }

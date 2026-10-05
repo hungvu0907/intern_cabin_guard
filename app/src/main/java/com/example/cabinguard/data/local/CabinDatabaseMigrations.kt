@@ -24,25 +24,7 @@ object CabinDatabaseMigrations {
 
     val MIGRATION_2_3 = object : Migration(2, 3) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            // Máy đã cài nhánh này (v2 đã có cột) thì không ADD lần nữa.
-            if (shouldAddIsSynced(existingColumns(db, TABLE))) {
-                db.execSQL(ADD_IS_SYNCED_SQL)
-            }
-        }
-    }
-
-    fun shouldAddIsSynced(existingColumns: Collection<String>): Boolean =
-        COLUMN_IS_SYNCED !in existingColumns
-
-    private fun existingColumns(db: SupportSQLiteDatabase, table: String): List<String> {
-        db.query("PRAGMA table_info(`$table`)").use { cursor ->
-            val nameIndex = cursor.getColumnIndex("name")
-            if (nameIndex < 0) return emptyList()
-            val names = mutableListOf<String>()
-            while (cursor.moveToNext()) {
-                names += cursor.getString(nameIndex)
-            }
-            return names
+            db.execSQL(ADD_IS_SYNCED_SQL)
         }
     }
 }
