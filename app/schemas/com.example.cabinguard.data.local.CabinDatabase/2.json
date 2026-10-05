@@ -1,0 +1,68 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "e5535349982583118a68619fc6dd2d9d",
+    "entities": [
+      {
+        "tableName": "cabin_telemetry",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `timestamp` INTEGER NOT NULL, `temperature` REAL NOT NULL, `pressure` REAL NOT NULL, `co2_level` REAL NOT NULL, `is_warning` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "temperature",
+            "columnName": "temperature",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pressure",
+            "columnName": "pressure",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "co2Level",
+            "columnName": "co2_level",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isWarning",
+            "columnName": "is_warning",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": ["id"]
+        },
+        "indices": [
+          {
+            "name": "index_cabin_telemetry_timestamp",
+            "unique": false,
+            "columnNames": ["timestamp"],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_cabin_telemetry_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e5535349982583118a68619fc6dd2d9d')"
+    ]
+  }
+}

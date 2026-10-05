@@ -19,8 +19,11 @@ class CleanupWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         return try {
-            repository.deleteLogsOlderThan(RETENTION_HOURS)
-            Log.d(TAG, "Đã dọn log cũ hơn $RETENTION_HOURS giờ")
+            repository.cleanupLogs(
+                syncedRetentionHours = SYNCED_RETENTION_HOURS,
+                hardLimitHours = HARD_LIMIT_HOURS,
+            )
+            Log.d(TAG, "Đã dọn log synced quá hạn và áp dụng trần $HARD_LIMIT_HOURS giờ")
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Dọn log thất bại: ${e.message}", e)
@@ -31,6 +34,7 @@ class CleanupWorker @AssistedInject constructor(
     companion object {
         const val UNIQUE_NAME = "cabin_cleanup_work"
         private const val TAG = "CleanupWorker"
-        private const val RETENTION_HOURS = 24L
+        private const val SYNCED_RETENTION_HOURS = 24L
+        private const val HARD_LIMIT_HOURS = 24L * 7
     }
 }
