@@ -51,6 +51,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.Manifest
 import android.os.Build
+import android.util.Log
 import com.example.cabinguard.service.CabinTelemetryService
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -73,9 +74,13 @@ fun DashboardScreen(
             when (event) {
                 ExportHistoryEvent.Empty ->
                     snackbarHostState.showSnackbar("Chưa có lịch sử để xuất")
+                ExportHistoryEvent.Failed ->
+                    snackbarHostState.showSnackbar("Không xuất được lịch sử")
                 is ExportHistoryEvent.Ready -> {
-                    val shared = runCatching { HistoryShare.share(context, event.csv) }
-                    if (shared.isFailure) {
+                    try {
+                        HistoryShare.share(context, event.file)
+                    } catch (error: Exception) {
+                        Log.e("Dashboard", "Không thể mở bảng chia sẻ CSV", error)
                         snackbarHostState.showSnackbar("Không xuất được lịch sử")
                     }
                 }

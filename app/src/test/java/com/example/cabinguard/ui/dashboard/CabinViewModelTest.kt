@@ -1,6 +1,7 @@
 package com.example.cabinguard.ui.dashboard
 
 import com.example.cabinguard.MainDispatcherRule
+import com.example.cabinguard.data.export.TelemetryCsvExporter
 import com.example.cabinguard.data.local.CabinTelemetry
 import com.example.cabinguard.data.repository.CabinTelemetryRepository
 import com.example.cabinguard.domain.engine.CabinSensorEngine
@@ -34,6 +35,7 @@ class CabinViewModelTest {
 
     private lateinit var engine: CabinSensorEngine
     private lateinit var repository: CabinTelemetryRepository
+    private lateinit var csvExporter: TelemetryCsvExporter
     private lateinit var sensorEvents: MutableSharedFlow<CabinTelemetry>
     private lateinit var history: MutableStateFlow<List<CabinTelemetry>>
 
@@ -45,7 +47,8 @@ class CabinViewModelTest {
         engine = mockk(relaxed = true)
         every { engine.sensorFlow } returns sensorEvents
         repository = mockk(relaxed = true)
-        every { repository.getAllLogs() } returns history
+        csvExporter = mockk()
+        every { repository.getRecentLogs() } returns history
         coEvery { repository.saveTelemetry(any()) } just runs
     }
 
@@ -56,13 +59,13 @@ class CabinViewModelTest {
 
     @Test
     fun `uiState starts as Loading before any emission`() {
-        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
+        val viewModel = viewModel()
         assertEquals(CabinUiState.Loading, viewModel.uiState.value)
     }
 
     @Test
     fun `uiState is Normal and saves when service is not running`() = runTest {
-        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
+        val viewModel = viewModel()
         val data = telemetry(temperature = 30f, co2Level = 800f)
 
         sensorEvents.emit(data)
@@ -76,7 +79,7 @@ class CabinViewModelTest {
     @Test
     fun `does not save telemetry when service is already running`() = runTest {
         CabinTelemetryService.isRunning = true
-        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
+        val viewModel = viewModel()
         val data = telemetry(temperature = 30f, co2Level = 800f)
 
         sensorEvents.emit(data)
@@ -87,7 +90,7 @@ class CabinViewModelTest {
 
     @Test
     fun `uiState is Warning when temperature exceeds 38C`() = runTest {
-        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
+        val viewModel = viewModel()
         val data = telemetry(temperature = 39f, co2Level = 500f)
 
         sensorEvents.emit(data)
@@ -99,7 +102,7 @@ class CabinViewModelTest {
 
     @Test
     fun `uiState is Warning when CO2 exceeds 1000 ppm`() = runTest {
-        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
+        val viewModel = viewModel()
         val data = telemetry(temperature = 28f, co2Level = 1100f)
 
         sensorEvents.emit(data)
@@ -109,7 +112,7 @@ class CabinViewModelTest {
 
     @Test
     fun `uiState switches from Normal to Warning on next reading`() = runTest {
-        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
+        val viewModel = viewModel()
 
         sensorEvents.emit(telemetry(temperature = 32f, co2Level = 600f))
         assertTrue(viewModel.uiState.value is CabinUiState.Normal)
@@ -120,7 +123,8 @@ class CabinViewModelTest {
 
     @Test
     fun `export emits Empty when history has no logs`() = runTest {
-        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
+        coEvery { csvExporter.export() } returns null
+        val viewModel = viewModel()
 
         viewModel.onExportHistory()
 
@@ -128,21 +132,23 @@ class CabinViewModelTest {
     }
 
     @Test
-    fun `export emits csv built from getAllLogs`() = runTest {
-        val log = telemetry(temperature = 39.5f, co2Level = 1100f).copy(id = 7, isSynced = true)
-        history.value = listOf(log)
-        val viewModel = CabinViewModel(engine, repository, FakeSettingsRepository())
+    fun `export emits ready file from streaming exporter`() = runTest {
+        val file = java.io.File("build/tmp/cabinguard_history.csv")
+        coEvery { csvExporter.export() } returns file
+        val viewModel = viewModel()
 
         viewModel.onExportHistory()
 
         val event = viewModel.exportEvents.first()
         assertTrue(event is ExportHistoryEvent.Ready)
-        val csv = (event as ExportHistoryEvent.Ready).csv
-        assertEquals(2, csv.lines().size)
-        assertTrue(csv.startsWith("id,timestamp,temperature,pressure,co2_level,is_warning,is_synced"))
-        assertTrue(csv.contains("39.5"))
-        assertTrue(csv.contains("1100"))
-        assertTrue(csv.contains("true"))
+        assertEquals(file, (event as ExportHistoryEvent.Ready).file)
     }
+
+    private fun viewModel() = CabinViewModel(
+        engine,
+        repository,
+        FakeSettingsRepository(),
+        csvExporter,
+    )
 
 }

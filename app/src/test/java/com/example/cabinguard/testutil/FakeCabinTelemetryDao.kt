@@ -13,6 +13,7 @@ class FakeCabinTelemetryDao(
 ) : CabinTelemetryDao {
 
     private val rows = MutableStateFlow(initial.toList())
+    var failMarkSyncedAfterFirst: Exception? = null
 
     fun snapshot(): List<CabinTelemetry> = rows.value
 
@@ -31,7 +32,14 @@ class FakeCabinTelemetryDao(
     override fun getRecentLogs(limit: Int): Flow<List<CabinTelemetry>> =
         getAllLogs().map { it.take(limit) }
 
-    override suspend fun deleteOlderThan(timestamp: Long) {
+    override suspend fun getLogsPage(limit: Int, offset: Int): List<CabinTelemetry> =
+        rows.value.sortedByDescending { it.timestamp }.drop(offset).take(limit)
+
+    override suspend fun deleteSyncedOlderThan(timestamp: Long) {
+        rows.value = rows.value.filterNot { it.isSynced && it.timestamp < timestamp }
+    }
+
+    override suspend fun deleteOlderThanHardLimit(timestamp: Long) {
         rows.value = rows.value.filterNot { it.timestamp < timestamp }
     }
 
@@ -41,10 +49,17 @@ class FakeCabinTelemetryDao(
         rows.value = emptyList()
     }
 
-    override suspend fun getUnsynced(): List<CabinTelemetry> =
-        rows.value.filter { !it.isSynced }.sortedBy { it.timestamp }
+    override suspend fun getUnsynced(limit: Int): List<CabinTelemetry> =
+        rows.value.filter { !it.isSynced }.sortedBy { it.timestamp }.take(limit)
 
     override suspend fun markSynced(ids: List<Long>) {
+        failMarkSyncedAfterFirst?.let { failure ->
+            val firstId = ids.firstOrNull()
+            rows.value = rows.value.map { row ->
+                if (row.id == firstId) row.copy(isSynced = true) else row
+            }
+            throw failure
+        }
         val idSet = ids.toSet()
         rows.value = rows.value.map { row ->
             if (row.id in idSet) row.copy(isSynced = true) else row

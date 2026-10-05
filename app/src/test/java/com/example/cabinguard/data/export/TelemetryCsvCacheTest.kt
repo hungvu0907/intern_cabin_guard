@@ -8,22 +8,16 @@ import java.io.File
 class TelemetryCsvCacheTest {
 
     @Test
-    fun `writes csv under cache export and overwrites the same file`() {
+    fun `returns stable csv path under cache export`() {
         val cacheDir = File("build/tmp/csv-cache-test").apply {
             deleteRecursively()
             mkdirs()
         }
-        val csv = "id,timestamp\n1,10"
-
-        val first = TelemetryCsvCache.write(cacheDir, csv)
-        val second = TelemetryCsvCache.write(cacheDir, "id,timestamp\n2,20")
+        val first = TelemetryCsvCache.targetFile(cacheDir)
+        val second = TelemetryCsvCache.targetFile(cacheDir)
 
         assertEquals(first, second)
         assertTrue(first.path.replace('\\', '/').endsWith("export/cabinguard_history.csv"))
-        assertEquals("id,timestamp\n2,20", first.readText())
-        assertEquals(
-            listOf(TelemetryCsvCache.FILE_NAME),
-            File(cacheDir, TelemetryCsvCache.DIRECTORY_NAME).list()?.toList(),
-        )
+        assertTrue(first.parentFile?.isDirectory == true)
     }
 }

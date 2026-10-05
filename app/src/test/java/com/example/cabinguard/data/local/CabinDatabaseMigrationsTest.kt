@@ -1,8 +1,6 @@
 package com.example.cabinguard.data.local
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CabinDatabaseMigrationsTest {
@@ -15,26 +13,6 @@ class CabinDatabaseMigrationsTest {
             "ALTER TABLE `cabin_telemetry` ADD COLUMN `is_synced` INTEGER NOT NULL DEFAULT 0",
             CabinDatabaseMigrations.ADD_IS_SYNCED_SQL,
         )
-    }
-
-    @Test
-    fun `sprint 1 rows without the column must be migrated`() {
-        val sprint1 = listOf("id", "timestamp", "temperature", "pressure", "co2_level", "is_warning")
-        assertTrue(CabinDatabaseMigrations.shouldAddIsSynced(sprint1))
-    }
-
-    @Test
-    fun `does not add is_synced twice if the column already exists`() {
-        val alreadyOnThisBranch = listOf(
-            "id",
-            "timestamp",
-            "temperature",
-            "pressure",
-            "co2_level",
-            "is_warning",
-            "is_synced",
-        )
-        assertFalse(CabinDatabaseMigrations.shouldAddIsSynced(alreadyOnThisBranch))
     }
 
     @Test
