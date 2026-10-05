@@ -18,7 +18,8 @@ data class SettingsUiState(
     val co2Threshold: Float = CabinTelemetry.CO2_WARNING_THRESHOLD,
     val errorMessage: String? = null,
     val isSaved: Boolean = false,
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val hasUnsavedChanges: Boolean = false,
 )
 
 @HiltViewModel
@@ -33,11 +34,15 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.thresholds.collect { thresholds ->
                 _uiState.update {
-                    it.copy(
-                        tempThreshold = thresholds.tempThreshold,
-                        co2Threshold = thresholds.co2Threshold,
-                        isLoading = false
-                    )
+                    if (it.hasUnsavedChanges) {
+                        it.copy(isLoading = false)
+                    } else {
+                        it.copy(
+                            tempThreshold = thresholds.tempThreshold,
+                            co2Threshold = thresholds.co2Threshold,
+                            isLoading = false,
+                        )
+                    }
                 }
             }
         }
@@ -45,13 +50,23 @@ class SettingsViewModel @Inject constructor(
 
     fun onTempChanged(value: Float) {
         _uiState.update {
-            it.copy(tempThreshold = value, errorMessage = null, isSaved = false)
+            it.copy(
+                tempThreshold = value,
+                errorMessage = null,
+                isSaved = false,
+                hasUnsavedChanges = true,
+            )
         }
     }
 
     fun onCo2Changed(value: Float) {
         _uiState.update {
-            it.copy(co2Threshold = value, errorMessage = null, isSaved = false)
+            it.copy(
+                co2Threshold = value,
+                errorMessage = null,
+                isSaved = false,
+                hasUnsavedChanges = true,
+            )
         }
     }
 
@@ -66,7 +81,13 @@ class SettingsViewModel @Inject constructor(
             }
             settingsRepository.saveThresholds(current.tempThreshold, current.co2Threshold)
                 .onSuccess {
-                    _uiState.update { it.copy(isSaved = true, errorMessage = null) }
+                    _uiState.update {
+                        it.copy(
+                            isSaved = true,
+                            errorMessage = null,
+                            hasUnsavedChanges = false,
+                        )
+                    }
                 }
                 .onFailure { e ->
                     _uiState.update {

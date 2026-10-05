@@ -70,4 +70,18 @@ class SettingsViewModelTest {
         assertNull(state.errorMessage)
         assertEquals(AlertThresholds(42f, 1500f), fake.thresholds.first())
     }
+
+    @Test
+    fun `repository emissions do not overwrite unsaved slider edits`() = runTest {
+        val fake = FakeSettingsRepository()
+        val viewModel = SettingsViewModel(fake)
+        viewModel.onTempChanged(42f)
+        viewModel.onCo2Changed(1500f)
+
+        fake.emit(AlertThresholds(35f, 700f))
+
+        assertEquals(42f, viewModel.uiState.value.tempThreshold)
+        assertEquals(1500f, viewModel.uiState.value.co2Threshold)
+        assertTrue(viewModel.uiState.value.hasUnsavedChanges)
+    }
 }
