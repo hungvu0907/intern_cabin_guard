@@ -1,6 +1,7 @@
 package com.example.cabinguard.ui.widget
 
 import com.example.cabinguard.data.local.CabinTelemetry
+import java.util.Locale
 
 /**
  * Nội dung widget Home. Tôn trọng [CabinTelemetry.isWarning] đã lưu,
@@ -21,7 +22,7 @@ fun CabinTelemetry?.toCabinWidgetUi(): CabinWidgetUi {
         )
     }
     return CabinWidgetUi(
-        temperatureText = "${String.format("%.1f", temperature)}°C",
+        temperatureText = "${String.format(Locale.US, "%.1f", temperature)}°C",
         statusText = if (isWarning) "Cảnh báo" else "An toàn",
         isWarning = isWarning,
     )
