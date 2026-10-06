@@ -5,7 +5,9 @@ import androidx.room.Room
 import com.example.cabinguard.data.local.CabinDatabase
 import com.example.cabinguard.data.local.CabinTelemetryDao
 import com.example.cabinguard.data.local.MIGRATION_1_2
+import com.example.cabinguard.data.local.MIGRATION_2_3
 import com.example.cabinguard.data.remote.MockCloudDatabase
+import com.example.cabinguard.data.remote.MOCK_MIGRATION_1_2
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -20,7 +22,8 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideMockCloudDatabase(@ApplicationContext context: Context): MockCloudDatabase =
-        Room.databaseBuilder(context, MockCloudDatabase::class.java, "mock_cloud.db").build()
+        Room.databaseBuilder(context, MockCloudDatabase::class.java, "mock_cloud.db")
+            .addMigrations(MOCK_MIGRATION_1_2).build()
 
     @Provides
     @Singleton
@@ -32,7 +35,7 @@ object DatabaseModule {
             CabinDatabase::class.java,
             "cabin_guard.db"
         )
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
     }
 

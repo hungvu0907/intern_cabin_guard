@@ -15,3 +15,10 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         )
     }
 }
+
+/** Keep existing rows and speed up bounded history / timestamp-keyset export. */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_cabin_telemetry_timestamp_id ON cabin_telemetry(timestamp, id)")
+    }
+}

@@ -32,6 +32,7 @@ class CabinWidgetUpdater @Inject constructor(@param:ApplicationContext private v
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
+                    policy.failed()
                     Log.w("CabinWidget", "Widget update failed; telemetry continues", error)
                 }
             }

@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 import com.example.cabinguard.data.local.CabinTelemetryDao
 import com.example.cabinguard.domain.sensor.CabinSensorEngine
 import com.example.cabinguard.domain.sensor.TelemetryRecorder
+import com.example.cabinguard.domain.sensor.retryMonitoring
 import com.example.cabinguard.data.settings.ThresholdSettingsRepository
 import com.example.cabinguard.widget.CabinWidgetUpdater
 import com.example.cabinguard.receiver.BatteryLowReceiver
@@ -67,7 +68,7 @@ class CabinTelemetryService : Service() {
             CabinNotification.build(
                 context = this,
                 recordCount = 0,
-                isWarning = false
+                isWarning = null
             )
         )
         startCollecting()
@@ -89,18 +90,27 @@ class CabinTelemetryService : Service() {
         if (collectJob?.isActive == true) return
         collectJob = scope.launch {
             Log.d(TAG, "collecting telemetry")
-            val recorder = TelemetryRecorder(dao)
-            engine.observeSamples(thresholds.thresholds).collect { sample ->
-                val telemetry = sample.telemetry
-                recorder.record(sample)
-                val count = dao.observeCount().first()
-                CabinNotification.notify(
-                    context = this@CabinTelemetryService,
-                    recordCount = count,
-                    isWarning = telemetry.isWarning
-                )
-                widgetUpdater.requestUpdate(telemetry.isWarning)
-            }
+            retryMonitoring(attempt = {
+                val recorder = TelemetryRecorder(dao)
+                engine.observeSamples(thresholds.thresholds).collect { sample ->
+                    val telemetry = sample.telemetry
+                    recorder.record(sample)
+                    val count = dao.observeCount().first()
+                    CabinNotification.notify(
+                        context = this@CabinTelemetryService,
+                        recordCount = count,
+                        isWarning = telemetry.isWarning
+                    )
+                    widgetUpdater.requestUpdate(telemetry.isWarning)
+                }
+            }, onFailure = { error ->
+                Log.e(TAG, "Telemetry collection failed; retrying in 5 seconds", error)
+                try {
+                    CabinNotification.notify(this@CabinTelemetryService, null, null)
+                } catch (notificationError: Exception) {
+                    Log.w(TAG, "Cannot display monitoring failure", notificationError)
+                }
+            })
         }
     }
 

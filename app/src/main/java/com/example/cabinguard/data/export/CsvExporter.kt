@@ -25,14 +25,20 @@ class CsvExporter @Inject constructor(
 
     /** Trả null khi chưa có log nào để xuất. */
     suspend fun export(): Uri? = withContext(Dispatchers.IO) {
-        val rows = dao.getAllLogs()
-        if (rows.isEmpty()) return@withContext null
+        val upperId = dao.maxId() ?: return@withContext null
 
         val dir = File(context.cacheDir, EXPORT_DIR)
-        val file = ExportFiles.write(dir, System.currentTimeMillis()) { writer ->
-            TelemetryCsvWriter.write(rows, writer)
+        var count = 0
+        val file = ExportFiles.writeSuspending(dir, System.currentTimeMillis()) { writer ->
+            count = TelemetryCsvWriter.writeBatches(writer) { last ->
+                dao.exportBatch(upperId, last?.timestamp ?: Long.MIN_VALUE, last?.id ?: Long.MIN_VALUE, 1000)
+            }
         }
-        Log.d(TAG, "exported ${rows.size} rows to ${file.name}")
+        if (count == 0) {
+            file.delete()
+            return@withContext null
+        }
+        Log.d(TAG, "exported $count rows to ${file.name}")
 
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }

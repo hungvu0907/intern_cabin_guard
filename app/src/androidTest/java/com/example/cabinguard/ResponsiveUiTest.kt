@@ -6,6 +6,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.CompositionLocalProvider
 import com.example.cabinguard.data.model.CabinTelemetry
 import com.example.cabinguard.ui.dashboard.*
 import com.example.cabinguard.ui.settings.*
@@ -16,16 +19,18 @@ import org.junit.Assert.*
 class ResponsiveUiTest {
     @get:Rule val compose = createComposeRule()
 
-    private fun checkDashboard(width: Int, height: Int) {
+    private fun checkDashboard(width: Int, height: Int, fontScale: Float = 1f) {
         var exports = 0
         var settings = 0
         compose.setContent {
             CabinGuardTheme {
+                CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
                 Box(Modifier.requiredSize(width.dp, height.dp)) {
                     DashboardContent(
                         DashboardUiState(latest = CabinTelemetry(1, 123, 40.0, 1000.0, 1100, true)),
                         onExportCsv = { exports++ }, onEditThresholds = { settings++ }
                     )
+                }
                 }
             }
         }
@@ -36,6 +41,23 @@ class ResponsiveUiTest {
 
     @Test fun phonePortraitKeepsSettingsAndExportAccessible() = checkDashboard(360, 640)
     @Test fun phoneLandscapeKeepsSettingsAndExportAccessible() = checkDashboard(640, 360)
+    @Test fun largerTextKeepsPrimaryActionsAccessible() = checkDashboard(360, 640, 1.8f)
+
+    @Test fun waitingForDataDoesNotClaimThatTheCabinIsSafe() {
+        compose.setContent { CabinGuardTheme { DashboardContent(DashboardUiState()) } }
+        compose.onAllNodesWithText("Cabin an toàn").assertCountEquals(0)
+        compose.onAllNodesWithText("Đang chờ mẫu cảm biến").assertCountEquals(1)
+    }
+
+    @Test fun settingsDisplaysErrorsNextToTheRelevantField() {
+        compose.setContent {
+            CabinGuardTheme {
+                SettingsContent(SettingsUiState("29", "3001", loading = false, dirty = true, showValidation = true), {}, {}, {}, {})
+            }
+        }
+        compose.onNodeWithText("Nhiệt độ phải từ 30 đến 60 °C").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("CO₂ phải từ 500 đến 3000 ppm").performScrollTo().assertIsDisplayed()
+    }
 
     @Test fun settingsShowsSaveErrorAndDisablesActionsDuringWrite() {
         compose.setContent {

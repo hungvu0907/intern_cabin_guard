@@ -25,23 +25,29 @@ object CabinNotification {
 
     fun build(
         context: Context,
-        recordCount: Int,
-        isWarning: Boolean
+        recordCount: Int?,
+        isWarning: Boolean?
     ): Notification {
-        val status = if (isWarning) "CẢNH BÁO" else "AN TOÀN"
+        val status = statusLabel(isWarning)
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("CabinGuard")
-            .setContentText("Records: $recordCount · $status")
+            .setContentText("Records: ${recordCount ?: "—"} · $status")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
     }
 
+    fun statusLabel(isWarning: Boolean?): String = when (isWarning) {
+        true -> "CẢNH BÁO"
+        false -> "AN TOÀN"
+        null -> "CHỜ DỮ LIỆU"
+    }
+
     fun notify(
         context: Context,
-        recordCount: Int,
-        isWarning: Boolean
+        recordCount: Int?,
+        isWarning: Boolean?
     ) {
         val manager = context.getSystemService<NotificationManager>()
             ?: return

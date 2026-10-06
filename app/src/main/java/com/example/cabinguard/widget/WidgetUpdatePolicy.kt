@@ -5,6 +5,7 @@ class WidgetUpdatePolicy {
     private var lastWarning: Boolean? = null
     @Synchronized fun isDue(now: Long): Boolean = lastUpdate?.let { now - it >= 30_000 } ?: true
     @Synchronized fun updated(now: Long) { lastUpdate = now }
+    @Synchronized fun failed() { lastUpdate = null }
     @Synchronized fun warningChanged(warning: Boolean): Boolean {
         val changed = warning != lastWarning
         lastWarning = warning

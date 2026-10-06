@@ -4,12 +4,12 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -45,27 +45,35 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.cabinguard.data.model.CabinTelemetry
 import com.example.cabinguard.domain.sensor.CabinThresholds
 import com.example.cabinguard.domain.sensor.CabinWarningThresholds
 import com.example.cabinguard.ui.theme.CabinGuardTheme
+import com.example.cabinguard.ui.theme.*
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private val SafeBackground = Color(0xFF0B1220)
-private val WarningBackground = Color(0xFF7A1212)
-private val CardSafe = Color(0xFF151C2C)
-private val CardWarning = Color(0xFF9B1C1C)
+private val SafeBackground = CabinInk
+private val WarningBackground = CabinDangerInk
+private val CardSafe = CabinPanel
+private val CardWarning = CabinDangerPanel
 private val TrackColor = Color(0x33FFFFFF)
-private val SafeAccent = Color(0xFF3DDC97)
-private val WarningAccent = Color(0xFFFF6B6B)
+private val SafeAccent = CabinSafe
+private val WarningAccent = Color(0xFFFFB4AB)
 
 /** Kích thước chạm tối thiểu theo guideline Android Automotive. */
 private val MinTouchTarget = 76.dp
@@ -85,14 +93,17 @@ fun DashboardScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isExporting by viewModel.isExporting.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var showSettings by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(viewModel) {
-        viewModel.exportResults.collect { result ->
-            when (result) {
-                is ExportResult.Ready -> shareCsv(context, result.uri)
-                ExportResult.Empty -> toast(context, "Chưa có log để xuất")
-                ExportResult.Failed -> toast(context, "Xuất CSV thất bại")
+    LaunchedEffect(viewModel, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            viewModel.exportResults.collect { result ->
+                when (result) {
+                    is ExportResult.Ready -> shareCsv(context, result.uri)
+                    ExportResult.Empty -> toast(context, "Chưa có log để xuất")
+                    ExportResult.Failed -> toast(context, "Xuất CSV thất bại")
+                }
             }
         }
     }
@@ -122,9 +133,16 @@ private fun shareCsv(context: Context, uri: Uri) {
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/csv"
         putExtra(Intent.EXTRA_STREAM, uri)
+        clipData = android.content.ClipData.newUri(context.contentResolver, "Cabin CSV", uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(send, "Chia sẻ lịch sử log"))
+    try {
+        context.startActivity(Intent.createChooser(send, "Chia sẻ lịch sử log"))
+    } catch (_: android.content.ActivityNotFoundException) {
+        toast(context, "Không có ứng dụng nhận file CSV")
+    } catch (_: SecurityException) {
+        toast(context, "Không thể cấp quyền chia sẻ CSV. Vui lòng thử lại.")
+    }
 }
 
 private fun toast(context: Context, message: String) {
@@ -143,17 +161,13 @@ fun DashboardContent(
     onExportCsv: () -> Unit = {},
     onEditThresholds: () -> Unit = {}
 ) {
-    val background by animateColorAsState(
-        targetValue = if (uiState.isWarning) WarningBackground else SafeBackground,
-        label = "dashboard-background"
-    )
-    val cardColor by animateColorAsState(
-        targetValue = if (uiState.isWarning) CardWarning else CardSafe,
-        label = "dashboard-card"
-    )
+    // Monitoring changes are frequent: show warning transitions without a delay.
+    val background = if (uiState.isWarning) WarningBackground else SafeBackground
+    val cardColor = if (uiState.isWarning) CardWarning else CardSafe
+    val fontScale = LocalDensity.current.fontScale
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (maxWidth < 840.dp || maxHeight < 480.dp) {
+        if (maxWidth < 1000.dp || maxHeight < 600.dp || fontScale > 1.3f) {
             CompactDashboard(uiState, background, cardColor, onTogglePause, isExporting, onExportCsv, onEditThresholds)
         } else {
             WideDashboard(uiState, background, cardColor, onTogglePause, isExporting, onExportCsv, onEditThresholds)
@@ -229,25 +243,42 @@ private fun CompactDashboard(
         contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Text("CabinGuard", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Text(if (uiState.isWarning) "CẢNH BÁO" else "Cabin an toàn", color = if (uiState.isWarning) WarningAccent else SafeAccent)
+            Text(uiState.statusText, color = statusColor(uiState), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             Text("Ngưỡng: %.1f °C · %d ppm".format(uiState.warningThresholds.temperatureCelsius, uiState.warningThresholds.co2Ppm), color = Color.White)
             Text("Sync giả lập trên thiết bị · ${uiState.unsyncedCount} log chờ sync", color = Color.White.copy(alpha = 0.7f))
         }
-        item { Button(onClick = onEditThresholds, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Chỉnh ngưỡng") } }
-        item { Button(onClick = onTogglePause, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (uiState.isPaused) "Tiếp tục" else "Tạm dừng hiển thị") } }
+        item {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onEditThresholds, modifier = Modifier.heightIn(min = 56.dp)) { Text("Chỉnh ngưỡng") }
+                androidx.compose.material3.OutlinedButton(onClick = onTogglePause, enabled = uiState.latest != null && uiState.readError == null,
+                    modifier = Modifier.heightIn(min = 56.dp)) { Text(if (uiState.isPaused) "Tiếp tục" else "Tạm dừng hiển thị") }
+            }
+        }
         item {
             uiState.latest?.let { row ->
                 Column(Modifier.fillMaxWidth().background(cardColor, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Nhiệt độ: %.1f °C".format(row.temperature), color = Color.White, fontSize = 24.sp)
                     Text("Áp suất: %.0f hPa".format(row.pressure), color = Color.White, fontSize = 24.sp)
                     Text("CO₂: ${row.co2Level} ppm", color = Color.White, fontSize = 24.sp)
+                    Text("Đo lúc " + timeFormatter.format(Instant.ofEpochMilli(row.timestamp)), color = CabinMuted, style = MaterialTheme.typography.bodySmall)
                 }
-            } ?: Text("Đang đọc cảm biến...", color = Color.White)
+            } ?: Text("Chưa có số đo", color = CabinMuted)
         }
         item { Button(onClick = onExportCsv, enabled = !isExporting, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (isExporting) "Đang xuất..." else "Xuất CSV") } }
-        item { Text("Lịch sử log", color = Color.White, fontSize = 18.sp) }
+        item {
+            Text("Lịch sử log", color = Color.White, fontSize = 18.sp)
+            Text("$RECENT_HISTORY_LIMIT mẫu gần nhất · CSV xuất toàn bộ log hiện có", style = MaterialTheme.typography.bodySmall, color = CabinMuted)
+        }
+        if (uiState.history.isEmpty()) item { Text("Chưa có log để hiển thị", color = CabinMuted) }
         items(uiState.history, key = { it.id }) { HistoryRow(it, cardColor) }
     }
+}
+
+private fun statusColor(state: DashboardUiState): Color = when {
+    state.readError != null -> WarningAccent
+    state.latest == null || state.loading || state.isPaused -> CabinMuted
+    state.isWarning -> WarningAccent
+    else -> SafeAccent
 }
 
 @Composable
@@ -271,18 +302,10 @@ private fun DashboardHeader(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = when {
-                    uiState.isPaused -> "Đã tạm dừng hiển thị · Service vẫn ghi log"
-                    uiState.isWarning -> "CẢNH BÁO: quá nhiệt hoặc khí độc"
-                    else -> "Cabin an toàn"
-                },
-                color = when {
-                    uiState.isPaused -> Color.White.copy(alpha = 0.7f)
-                    uiState.isWarning -> Color(0xFFFFC9C9)
-                    else -> SafeAccent
-                },
+                text = uiState.statusText,
+                color = statusColor(uiState),
                 fontSize = 18.sp,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 4.dp).semantics { liveRegion = LiveRegionMode.Polite }
             )
             Text(
                 text = "Ngưỡng: %.1f °C · %d ppm".format(
@@ -293,6 +316,9 @@ private fun DashboardHeader(
                 fontSize = 14.sp,
                 modifier = Modifier.padding(top = 2.dp)
             )
+            uiState.latest?.let { row ->
+                Text("Đo lúc " + timeFormatter.format(Instant.ofEpochMilli(row.timestamp)), color = CabinMuted, style = MaterialTheme.typography.bodySmall)
+            }
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -310,6 +336,7 @@ private fun DashboardHeader(
             }
             Button(
                 onClick = onTogglePause,
+                enabled = uiState.latest != null && uiState.readError == null,
                 modifier = Modifier.heightIn(min = MinTouchTarget),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = cardColor,
@@ -412,7 +439,8 @@ private fun MetricGauge(
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidth = 16.dp.toPx()
+            if (size.minDimension <= 0f) return@Canvas
+            val strokeWidth = minOf(16.dp.toPx(), size.minDimension / 5)
             val arcSize = Size(size.minDimension - strokeWidth, size.minDimension - strokeWidth)
             val topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f)
             val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round)
@@ -466,7 +494,7 @@ private fun Co2Reading(
             text = if (co2OverLimit) {
                 "Vượt ngưỡng $warningThreshold ppm"
             } else {
-                "Dưới ngưỡng $warningThreshold ppm"
+                "Trong ngưỡng $warningThreshold ppm"
             },
             color = Color.White.copy(alpha = 0.75f),
             fontSize = 14.sp
@@ -510,6 +538,8 @@ private fun HistoryPane(
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
+        Text("$RECENT_HISTORY_LIMIT mẫu gần nhất · CSV xuất toàn bộ log", color = CabinMuted, style = MaterialTheme.typography.bodySmall)
+        if (history.isEmpty()) Text("Chưa có log để hiển thị", color = CabinMuted)
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -538,7 +568,7 @@ private fun HistoryRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(Modifier.weight(1f).padding(end = 8.dp)) {
             Text(
                 text = timeFormatter.format(Instant.ofEpochMilli(item.timestamp)),
                 color = Color.White,

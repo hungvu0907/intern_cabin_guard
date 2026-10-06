@@ -17,6 +17,11 @@ class SyncTelemetryTest {
         var noProgress = false
         override suspend fun insert(telemetry: CabinTelemetry) { rows += telemetry }
         override fun observeAll() = flowOf(rows.toList())
+        override fun observeRecent(limit: Int) = flowOf(rows.sortedByDescending { it.timestamp }.take(limit))
+        override suspend fun maxId() = rows.maxOfOrNull { it.id }
+        override suspend fun exportBatch(maxId: Long, afterTimestamp: Long, afterId: Long, limit: Int) =
+            rows.filter { it.id <= maxId && (it.timestamp > afterTimestamp || (it.timestamp == afterTimestamp && it.id > afterId)) }
+                .sortedWith(compareBy<CabinTelemetry> { it.timestamp }.thenBy { it.id }).take(limit)
         override fun observeLatest() = flowOf(rows.lastOrNull())
         override fun observeCount() = flowOf(rows.size)
         override fun observeUnsyncedCount() = flowOf(rows.count { !it.isSynced })

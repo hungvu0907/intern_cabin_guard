@@ -22,11 +22,25 @@ interface CabinTelemetryDao {
     fun observeAll():
         Flow<List<CabinTelemetry>>
 
+    @Query("SELECT * FROM cabin_telemetry ORDER BY timestamp DESC, id DESC LIMIT :limit")
+    fun observeRecent(limit: Int): Flow<List<CabinTelemetry>>
+
+    @Query("SELECT MAX(id) FROM cabin_telemetry")
+    suspend fun maxId(): Long?
+
+    @Query("""
+        SELECT * FROM cabin_telemetry
+        WHERE id <= :maxId
+        AND (timestamp > :afterTimestamp OR (timestamp = :afterTimestamp AND id > :afterId))
+        ORDER BY timestamp ASC, id ASC LIMIT :limit
+    """)
+    suspend fun exportBatch(maxId: Long, afterTimestamp: Long, afterId: Long, limit: Int): List<CabinTelemetry>
+
     @Query(
         """
         SELECT *
         FROM cabin_telemetry
-        ORDER BY timestamp DESC
+        ORDER BY timestamp DESC, id DESC
         LIMIT 1
         """
     )

@@ -13,6 +13,7 @@ import androidx.glance.layout.*
 import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
 import com.example.cabinguard.MainActivity
+import com.example.cabinguard.ui.theme.*
 import com.example.cabinguard.data.local.CabinTelemetryDao
 import com.example.cabinguard.data.settings.ThresholdSettingsRepository
 import dagger.hilt.EntryPoint
@@ -47,14 +48,14 @@ class CabinWidget : GlanceAppWidget() {
             val warning = snapshot.isWarning
             Column(
                 modifier = GlanceModifier.fillMaxSize()
-                    .background(Color(if (warning) 0xFF7A1212 else 0xFF0B1220))
+                    .background(if (warning) CabinDangerInk else CabinInk)
                     .clickable(actionStartActivity<MainActivity>())
                     .padding(16.dp),
                 verticalAlignment = Alignment.Vertical.CenterVertically
             ) {
-                Text("CabinGuard", style = TextStyle(color = ColorProvider(Color.White), fontSize = 20.sp, fontWeight = FontWeight.Bold))
+                Text("CabinGuard", style = TextStyle(color = ColorProvider(CabinOnInk), fontSize = 20.sp, fontWeight = FontWeight.Bold))
                 Text(if (latest == null) "Đang chờ dữ liệu" else if (warning) "CẢNH BÁO" else "Cabin an toàn",
-                    style = TextStyle(color = ColorProvider(Color(if (warning) 0xFFFFC9C9 else 0xFF3DDC97))))
+                    style = TextStyle(color = ColorProvider(if (latest == null) CabinMuted else if (warning) Color(0xFFFFB4AB) else CabinSafe)))
                 latest?.let { row ->
                     Text(String.format(locale, "%.1f °C · %d ppm", row.temperature, row.co2Level),
                         style = TextStyle(color = ColorProvider(Color.White), fontSize = 18.sp))

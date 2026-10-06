@@ -7,11 +7,29 @@ import java.io.Writer
 object ExportFiles {
     const val RETENTION_MILLIS = 24 * 60 * 60 * 1000L
 
-    fun write(directory: File, now: Long, content: (Writer) -> Unit): File {
+    private fun create(directory: File, now: Long): File {
         check(directory.isDirectory || directory.mkdirs()) { "Cannot create export directory" }
         directory.listFiles()?.filter { it.isFile && it.extension == "csv" && it.lastModified() < now - RETENTION_MILLIS }
             ?.forEach { it.delete() }
-        val file = File.createTempFile("cabin_log_${now}_", ".csv", directory)
+        return File.createTempFile("cabin_log_${now}_", ".csv", directory)
+    }
+
+    fun write(directory: File, now: Long, content: (Writer) -> Unit): File {
+        val file = create(directory, now)
+        try {
+            file.bufferedWriter(Charsets.UTF_8).use { writer ->
+                writer.write(0xFEFF)
+                content(writer)
+            }
+            return file
+        } catch (error: Throwable) {
+            file.delete()
+            throw error
+        }
+    }
+
+    suspend fun writeSuspending(directory: File, now: Long, content: suspend (Writer) -> Unit): File {
+        val file = create(directory, now)
         try {
             file.bufferedWriter(Charsets.UTF_8).use { writer ->
                 writer.write(0xFEFF)

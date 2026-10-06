@@ -5,6 +5,8 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 /**
  * Ghi lịch sử log ra CSV. Thuần Kotlin để unit test không cần Android.
@@ -19,10 +21,11 @@ object TelemetryCsvWriter {
     fun write(
         rows: Iterable<CabinTelemetry>,
         out: Appendable,
-        zone: ZoneId = ZoneId.systemDefault()
+        zone: ZoneId = ZoneId.systemDefault(),
+        includeHeader: Boolean = true
     ) {
         val timeFormatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(zone)
-        out.append(HEADER).append('\n')
+        if (includeHeader) out.append(HEADER).append('\n')
         rows.forEach { row ->
             out.append(row.id.toString()).append(',')
                 .append(timeFormatter.format(Instant.ofEpochMilli(row.timestamp))).append(',')
@@ -32,6 +35,28 @@ object TelemetryCsvWriter {
                 .append(row.co2Level.toString()).append(',')
                 .append(row.isWarning.toString()).append(',')
                 .append(row.isSynced.toString()).append('\n')
+        }
+    }
+
+    /** Query and release one bounded batch at a time; writes one header even if empty. */
+    suspend fun writeBatches(
+        out: Appendable,
+        zone: ZoneId = ZoneId.systemDefault(),
+        loadBatch: suspend (last: CabinTelemetry?) -> List<CabinTelemetry>
+    ): Int {
+        out.append(HEADER).append('\n')
+        var last: CabinTelemetry? = null
+        var written = 0
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            val batch = loadBatch(last)
+            if (batch.isEmpty()) return written
+            val next = batch.last()
+            check(last == null || next.timestamp > last.timestamp ||
+                (next.timestamp == last.timestamp && next.id > last.id)) { "CSV pagination made no progress" }
+            write(batch, out, zone, includeHeader = false)
+            written += batch.size
+            last = next
         }
     }
 }
