@@ -52,10 +52,20 @@ class CabinTelemetryDaoTest {
 
         dao.deleteSyncedOlderThan(timestamp = 100)
 
-        assertEquals(listOf(1L), dao.getLogsPage(limit = 10, offset = 0).map { it.id })
+        assertEquals(listOf(1L), dao.getLogsPage(
+            maxId = dao.getMaxLogId()!!,
+            beforeTimestamp = null,
+            beforeId = Long.MAX_VALUE,
+            limit = 10,
+        ).map { it.id })
 
         dao.deleteOlderThanHardLimit(timestamp = 100)
-        assertTrue(dao.getLogsPage(limit = 10, offset = 0).isEmpty())
+        assertTrue(dao.getLogsPage(
+            maxId = 2,
+            beforeTimestamp = null,
+            beforeId = Long.MAX_VALUE,
+            limit = 10,
+        ).isEmpty())
     }
 
     private fun sample(id: Long, timestamp: Long, isSynced: Boolean) = CabinTelemetry(

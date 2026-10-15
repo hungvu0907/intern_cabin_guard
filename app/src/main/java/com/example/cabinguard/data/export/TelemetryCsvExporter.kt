@@ -21,8 +21,10 @@ class TelemetryCsvExporter @Inject constructor(
     private val repository: CabinTelemetryRepository,
 ) {
     suspend fun export(): File? = withContext(Dispatchers.IO) {
-        var offset = 0
-        var page = repository.getLogsPage(PAGE_SIZE, offset)
+        val maxId = repository.getMaxLogId() ?: return@withContext null
+        var beforeTimestamp: Long? = null
+        var beforeId = Long.MAX_VALUE
+        var page = repository.getLogsPage(maxId, beforeTimestamp, beforeId, PAGE_SIZE)
         if (page.isEmpty()) return@withContext null
 
         val target = TelemetryCsvCache.targetFile(context.cacheDir)
@@ -32,8 +34,10 @@ class TelemetryCsvExporter @Inject constructor(
                 writer.appendLine(TelemetryCsvFormatter.HEADER)
                 while (page.isNotEmpty()) {
                     page.forEach { log -> writer.appendLine(TelemetryCsvFormatter.formatRow(log)) }
-                    offset += page.size
-                    page = repository.getLogsPage(PAGE_SIZE, offset)
+                    val last = page.last()
+                    beforeTimestamp = last.timestamp
+                    beforeId = last.id
+                    page = repository.getLogsPage(maxId, beforeTimestamp, beforeId, PAGE_SIZE)
                 }
             }
             replaceAtomically(temporary, target)

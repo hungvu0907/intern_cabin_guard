@@ -32,8 +32,21 @@ class FakeCabinTelemetryDao(
     override fun getRecentLogs(limit: Int): Flow<List<CabinTelemetry>> =
         getAllLogs().map { it.take(limit) }
 
-    override suspend fun getLogsPage(limit: Int, offset: Int): List<CabinTelemetry> =
-        rows.value.sortedByDescending { it.timestamp }.drop(offset).take(limit)
+    override suspend fun getMaxLogId(): Long? = rows.value.maxOfOrNull { it.id }
+
+    override suspend fun getLogsPage(
+        maxId: Long,
+        beforeTimestamp: Long?,
+        beforeId: Long,
+        limit: Int,
+    ): List<CabinTelemetry> = rows.value
+        .asSequence()
+        .filter { it.id <= maxId }
+        .filter { beforeTimestamp == null || it.timestamp < beforeTimestamp ||
+            (it.timestamp == beforeTimestamp && it.id < beforeId) }
+        .sortedWith(compareByDescending<CabinTelemetry> { it.timestamp }.thenByDescending { it.id })
+        .take(limit)
+        .toList()
 
     override suspend fun deleteSyncedOlderThan(timestamp: Long) {
         rows.value = rows.value.filterNot { it.isSynced && it.timestamp < timestamp }

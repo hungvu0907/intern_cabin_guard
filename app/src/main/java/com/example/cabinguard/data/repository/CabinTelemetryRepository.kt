@@ -36,8 +36,14 @@ class CabinTelemetryRepository @Inject constructor(
 
     fun getAllLogs(): Flow<List<CabinTelemetry>> = dao.getAllLogs()
 
-    suspend fun getLogsPage(limit: Int, offset: Int): List<CabinTelemetry> =
-        dao.getLogsPage(limit, offset)
+    suspend fun getMaxLogId(): Long? = dao.getMaxLogId()
+
+    suspend fun getLogsPage(
+        maxId: Long,
+        beforeTimestamp: Long?,
+        beforeId: Long,
+        limit: Int,
+    ): List<CabinTelemetry> = dao.getLogsPage(maxId, beforeTimestamp, beforeId, limit)
 
     fun getRecentLogs(limit: Int = 50): Flow<List<CabinTelemetry>> = dao.getRecentLogs(limit)
 

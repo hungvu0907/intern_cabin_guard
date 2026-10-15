@@ -24,16 +24,19 @@ class TelemetryCsvExporterTest {
         val context = mockk<Context>()
         val repository = mockk<CabinTelemetryRepository>()
         every { context.cacheDir } returns temporaryFolder.root
-        coEvery { repository.getLogsPage(500, 0) } returns listOf(sample(2), sample(1))
-        coEvery { repository.getLogsPage(500, 2) } returns emptyList()
+        coEvery { repository.getMaxLogId() } returns 2L
+        coEvery { repository.getLogsPage(2L, null, Long.MAX_VALUE, 500) } returns
+            listOf(sample(2), sample(1))
+        coEvery { repository.getLogsPage(2L, 1L, 1L, 500) } returns emptyList()
 
         val file = TelemetryCsvExporter(context, repository).export()
 
         assertNotNull(file)
         assertEquals(3, file!!.readLines().size)
         assertEquals("2", file.readLines()[1].substringBefore(','))
-        coVerify(exactly = 1) { repository.getLogsPage(500, 0) }
-        coVerify(exactly = 1) { repository.getLogsPage(500, 2) }
+        coVerify(exactly = 1) { repository.getMaxLogId() }
+        coVerify(exactly = 1) { repository.getLogsPage(2L, null, Long.MAX_VALUE, 500) }
+        coVerify(exactly = 1) { repository.getLogsPage(2L, 1L, 1L, 500) }
     }
 
     private fun sample(id: Long) = CabinTelemetry(
