@@ -6,6 +6,20 @@ import org.junit.Test
 class CabinDatabaseMigrationsTest {
 
     @Test
+    fun `v3 to v4 adds nullable per metric warning columns`() {
+        assertEquals(3, CabinDatabaseMigrations.MIGRATION_3_4.startVersion)
+        assertEquals(4, CabinDatabaseMigrations.MIGRATION_3_4.endVersion)
+        assertEquals(
+            "ALTER TABLE `cabin_telemetry` ADD COLUMN `is_temp_warning` INTEGER",
+            CabinDatabaseMigrations.ADD_IS_TEMP_WARNING_SQL,
+        )
+        assertEquals(
+            "ALTER TABLE `cabin_telemetry` ADD COLUMN `is_co2_warning` INTEGER",
+            CabinDatabaseMigrations.ADD_IS_CO2_WARNING_SQL,
+        )
+    }
+
+    @Test
     fun `v2 to v3 adds is_synced with default unsynced`() {
         assertEquals(2, CabinDatabaseMigrations.MIGRATION_2_3.startVersion)
         assertEquals(3, CabinDatabaseMigrations.MIGRATION_2_3.endVersion)

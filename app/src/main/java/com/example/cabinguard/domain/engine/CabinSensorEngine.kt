@@ -65,8 +65,12 @@ class CabinSensorEngine(
      */
     val sensorFlow: SharedFlow<CabinTelemetry> = rawReadings.map { reading ->
         val currentThresholds = thresholds.value
+        val isTempWarning = reading.temperature > currentThresholds.tempThreshold
+        val isCo2Warning = reading.co2Level > currentThresholds.co2Threshold
         reading.copy(
-            isWarning = currentThresholds.isWarning(reading.temperature, reading.co2Level)
+            isWarning = isTempWarning || isCo2Warning,
+            isTempWarning = isTempWarning,
+            isCo2Warning = isCo2Warning,
         )
     }.shareIn(
         sharingScope,

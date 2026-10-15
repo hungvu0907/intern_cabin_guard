@@ -12,7 +12,7 @@ class TelemetryCsvFormatterTest {
         val csv = TelemetryCsvFormatter.format(emptyList())
         assertEquals(TelemetryCsvFormatter.HEADER, csv)
         assertEquals(
-            "id,timestamp,temperature,pressure,co2_level,is_warning,is_synced",
+            "id,timestamp,temperature,pressure,co2_level,is_warning,is_synced,is_temp_warning,is_co2_warning",
             csv,
         )
     }
@@ -54,6 +54,16 @@ class TelemetryCsvFormatterTest {
         )
         val ids = csv.lines().drop(1).map { it.substringBefore(',') }
         assertEquals(listOf("2", "1"), ids)
+    }
+
+    @Test
+    fun `exports per metric warnings and leaves legacy values unknown`() {
+        val csv = TelemetryCsvFormatter.format(
+            listOf(sample(id = 1).copy(isWarning = true, isTempWarning = true, isCo2Warning = false),
+                sample(id = 2).copy(isWarning = true)),
+        )
+        assertTrue(csv.lines()[1].endsWith(",true,false"))
+        assertTrue(csv.lines()[2].endsWith(",,"))
     }
 
     private fun sample(

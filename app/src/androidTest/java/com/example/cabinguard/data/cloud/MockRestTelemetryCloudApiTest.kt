@@ -50,6 +50,19 @@ class MockRestTelemetryCloudApiTest {
         assertTrue(directory.listFiles().orEmpty().any { ".corrupt-" in it.name })
     }
 
+    @Test
+    fun documentPreservesIndependentWarningFlags() = runTest {
+        api.upsertAll(listOf(sample(id = 11, temperature = 30f).copy(
+            isWarning = true,
+            isTempWarning = false,
+            isCo2Warning = true,
+        )))
+
+        val json = JSONObject(api.documentFile(11).readText())
+        assertEquals(false, json.getBoolean("isTempWarning"))
+        assertEquals(true, json.getBoolean("isCo2Warning"))
+    }
+
     private fun sample(id: Long, temperature: Float) = CabinTelemetry(
         id = id,
         timestamp = 1_700_000_000_000L + id,

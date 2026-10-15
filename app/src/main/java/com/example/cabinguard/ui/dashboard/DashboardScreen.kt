@@ -434,13 +434,13 @@ private fun LogHistoryItem(log: CabinTelemetry) {
             Text(
                 text = "${String.format("%.1f", log.temperature)}°C",
                 fontWeight = FontWeight.Medium,
-                color = if (log.isWarning)
+                color = if (log.isTempWarning == true)
                     Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = "${String.format("%.0f", log.co2Level)} ppm",
                 fontWeight = FontWeight.Medium,
-                color = if (log.isWarning)
+                color = if (log.isCo2Warning == true)
                     Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface
             )
             Text(

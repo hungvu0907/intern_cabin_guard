@@ -8,7 +8,7 @@ import com.example.cabinguard.data.local.CabinTelemetry
  */
 object TelemetryCsvFormatter {
 
-    const val HEADER = "id,timestamp,temperature,pressure,co2_level,is_warning,is_synced"
+    const val HEADER = "id,timestamp,temperature,pressure,co2_level,is_warning,is_synced,is_temp_warning,is_co2_warning"
 
     fun format(logs: List<CabinTelemetry>): String {
         if (logs.isEmpty()) return HEADER
@@ -25,6 +25,8 @@ object TelemetryCsvFormatter {
         log.co2Level.toString(),
         log.isWarning.toString(),
         log.isSynced.toString(),
+        log.isTempWarning?.toString().orEmpty(),
+        log.isCo2Warning?.toString().orEmpty(),
     ).joinToString(separator = ",") { cell(it) }
 
     /** Bọc ô nếu giá trị có dấu phẩy / ngoặc kép / xuống dòng. */

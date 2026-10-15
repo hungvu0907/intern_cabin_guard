@@ -10,6 +10,8 @@ data class CloudTelemetryDocument(
     val pressure: Float,
     val co2Level: Float,
     val isWarning: Boolean,
+    val isTempWarning: Boolean?,
+    val isCo2Warning: Boolean?,
 )
 
 fun CabinTelemetry.toCloudDocument(): CloudTelemetryDocument = CloudTelemetryDocument(
@@ -19,6 +21,8 @@ fun CabinTelemetry.toCloudDocument(): CloudTelemetryDocument = CloudTelemetryDoc
     pressure = pressure,
     co2Level = co2Level,
     isWarning = isWarning,
+    isTempWarning = isTempWarning,
+    isCo2Warning = isCo2Warning,
 )
 
 /** Gộp theo id: cùng id thì ghi đè, không thêm document mới. */

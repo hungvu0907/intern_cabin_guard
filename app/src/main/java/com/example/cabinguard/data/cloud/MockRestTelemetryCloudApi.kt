@@ -60,6 +60,8 @@ class MockRestTelemetryCloudApi internal constructor(
             .put("pressure", record.pressure.toDouble())
             .put("co2Level", record.co2Level.toDouble())
             .put("isWarning", record.isWarning)
+            .put("isTempWarning", record.isTempWarning ?: JSONObject.NULL)
+            .put("isCo2Warning", record.isCo2Warning ?: JSONObject.NULL)
         val temporary = File(directory, "${target.name}.tmp")
         try {
             temporary.writeText(json.toString(2), Charsets.UTF_8)

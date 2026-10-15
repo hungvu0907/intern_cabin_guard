@@ -179,7 +179,7 @@ fun AutomotiveDashboardContent(
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 items(items = historyLogs, key = { it.id }) { log ->
-                    AutomotiveLogItem(log = log, thresholds = thresholds)
+                    AutomotiveLogItem(log = log)
                 }
             }
         }
@@ -215,7 +215,7 @@ private fun AutomotiveStatusBar(isWarning: Boolean) {
 }
 
 @Composable
-private fun AutomotiveLogItem(log: CabinTelemetry, thresholds: AlertThresholds) {
+private fun AutomotiveLogItem(log: CabinTelemetry) {
     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     val timeText = timeFormat.format(Date(log.timestamp))
 
@@ -244,14 +244,14 @@ private fun AutomotiveLogItem(log: CabinTelemetry, thresholds: AlertThresholds) 
                 text = "${String.format("%.1f", log.temperature)}°C",
                 fontWeight = FontWeight.Medium,
                 fontSize = 12.sp,
-                color = if (log.temperature > thresholds.tempThreshold)
+                color = if (log.isTempWarning == true)
                     AutoWarningRed else MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = "${String.format("%.0f", log.co2Level)}ppm",
                 fontWeight = FontWeight.Medium,
                 fontSize = 12.sp,
-                color = if (log.co2Level > thresholds.co2Threshold)
+                color = if (log.isCo2Warning == true)
                     AutoWarningRed else MaterialTheme.colorScheme.onSurface
             )
             Text(

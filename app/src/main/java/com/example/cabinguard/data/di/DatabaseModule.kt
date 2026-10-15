@@ -27,10 +27,11 @@ object DatabaseModule {
             CabinDatabase::class.java,
             CabinDatabase.DATABASE_NAME
         )
-            // Giữ log Sprint 1: 1→2 index timestamp, 2→3 thêm is_synced.
+            // Giữ log cũ qua mọi phiên bản schema.
             .addMigrations(
                 CabinDatabaseMigrations.MIGRATION_1_2,
                 CabinDatabaseMigrations.MIGRATION_2_3,
+                CabinDatabaseMigrations.MIGRATION_3_4,
             )
             .build()
     }
