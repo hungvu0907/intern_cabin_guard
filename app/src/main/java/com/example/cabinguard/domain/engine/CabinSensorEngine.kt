@@ -10,9 +10,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -35,11 +39,11 @@ class CabinSensorEngine(
 
     private val sharingScope = CoroutineScope(SupervisorJob() + dispatcher)
 
-    /** Latest thresholds are state, not another source of sensor emissions. */
-    private val thresholds = settingsRepository.thresholds.stateIn(
+    /** null until DataStore provides the first saved value; never assume defaults during startup. */
+    private val thresholds: StateFlow<AlertThresholds?> = settingsRepository.thresholds.stateIn(
         scope = sharingScope,
         started = SharingStarted.Eagerly,
-        initialValue = AlertThresholds(),
+        initialValue = null,
     )
 
     // Cảm biến thô — isWarning được tính khi từng reading mới được phát.
@@ -63,8 +67,11 @@ class CabinSensorEngine(
      * WhileSubscribed(0): dừng emit khi không còn collector.
      * replay = 1: collector vào sau (bật Service) nhận ngay bản mới nhất.
      */
-    val sensorFlow: SharedFlow<CabinTelemetry> = rawReadings.map { reading ->
-        val currentThresholds = thresholds.value
+    val sensorFlow: SharedFlow<CabinTelemetry> = rawReadings.onStart {
+        // Do not start the raw sensor until the persisted thresholds have loaded.
+        thresholds.filterNotNull().first()
+    }.map { reading ->
+        val currentThresholds = checkNotNull(thresholds.value)
         val isTempWarning = reading.temperature > currentThresholds.tempThreshold
         val isCo2Warning = reading.co2Level > currentThresholds.co2Threshold
         reading.copy(

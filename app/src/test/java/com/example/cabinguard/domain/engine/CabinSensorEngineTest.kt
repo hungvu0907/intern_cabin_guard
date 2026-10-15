@@ -1,9 +1,12 @@
 package com.example.cabinguard.domain.engine
 
 import com.example.cabinguard.data.local.CabinTelemetry
+import com.example.cabinguard.data.repository.SettingsRepository
 import com.example.cabinguard.domain.model.AlertThresholds
 import com.example.cabinguard.testutil.FakeSettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -17,6 +20,38 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CabinSensorEngineTest {
+
+    @Test
+    fun `first reading waits for persisted thresholds instead of using defaults`() = runTest {
+        val saved = AlertThresholds(tempThreshold = 20f, co2Threshold = 100f)
+        val slowSettings = object : SettingsRepository {
+            override val thresholds = flow {
+                delay(500)
+                emit(saved)
+            }
+
+            override suspend fun saveThresholds(
+                tempThreshold: Float,
+                co2Threshold: Float,
+            ): Result<Unit> = error("Not used by this test")
+        }
+        val engine = CabinSensorEngine(slowSettings, UnconfinedTestDispatcher(testScheduler))
+        val readings = mutableListOf<CabinTelemetry>()
+        backgroundScope.launch { engine.sensorFlow.collect { readings.add(it) } }
+
+        runCurrent()
+        assertTrue("No reading before DataStore's first value", readings.isEmpty())
+        advanceTimeBy(499)
+        runCurrent()
+        assertTrue(readings.isEmpty())
+
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(1, readings.size)
+        assertTrue(readings.single().isWarning)
+        assertEquals(true, readings.single().isTempWarning)
+        assertEquals(true, readings.single().isCo2Warning)
+    }
 
     @Test
     fun `sensorFlow emits values within spec ranges`() = runTest {
