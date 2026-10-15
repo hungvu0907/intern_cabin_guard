@@ -19,6 +19,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.IOException
 
 @RunWith(AndroidJUnit4::class)
 class SyncWorkerTest {
@@ -49,6 +50,58 @@ class SyncWorkerTest {
     }
 
     @Test
+    fun syncWorkerDrainsBacklogAcrossMultipleBoundedBatches() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, CabinDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val dao = database.cabinTelemetryDao()
+            (1L..1_000L).forEach { id -> dao.insert(sample(id)) }
+            val cloud = RecordingCloudApi()
+            val repository = CabinTelemetryRepository(dao, cloud)
+            val worker = TestListenableWorkerBuilder<SyncWorker>(context)
+                .setWorkerFactory(SyncWorkerFactory(repository))
+                .build()
+
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            assertEquals(1_000, cloud.uploaded.size)
+            assertEquals((1L..1_000L).toSet(), cloud.uploaded.map { it.id }.toSet())
+            assertEquals(listOf(200, 200, 200, 200, 200), cloud.batchSizes)
+            assertTrue(dao.getUnsynced(limit = 1).isEmpty())
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun syncWorkerRetriesAfterLaterBatchFailsWithoutRepeatingSyncedRows() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, CabinDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val dao = database.cabinTelemetryDao()
+            (1L..250L).forEach { id -> dao.insert(sample(id)) }
+            val cloud = RecordingCloudApi(failOnCall = 2)
+            val repository = CabinTelemetryRepository(dao, cloud)
+            val worker = TestListenableWorkerBuilder<SyncWorker>(context)
+                .setWorkerFactory(SyncWorkerFactory(repository))
+                .build()
+
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.retry(), result)
+            assertEquals((1L..200L).toList(), cloud.uploaded.map { it.id })
+            assertEquals((201L..250L).toList(), dao.getUnsynced(200).map { it.id })
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
     fun periodicSyncRequiresConnectedNetwork() {
         val request = CabinGuardApplication.buildSyncWorkRequest()
         assertEquals(NetworkType.CONNECTED, request.workSpec.constraints.requiredNetworkType)
@@ -68,9 +121,16 @@ class SyncWorkerTest {
         }
     }
 
-    private class RecordingCloudApi : TelemetryCloudApi {
+    private class RecordingCloudApi(
+        private val failOnCall: Int? = null,
+    ) : TelemetryCloudApi {
         val uploaded = mutableListOf<CabinTelemetry>()
+        val batchSizes = mutableListOf<Int>()
+        private var calls = 0
         override suspend fun upsertAll(records: List<CabinTelemetry>) {
+            calls++
+            if (calls == failOnCall) throw IOException("cloud unavailable")
+            batchSizes += records.size
             uploaded += records
         }
     }
