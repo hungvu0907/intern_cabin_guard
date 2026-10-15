@@ -9,6 +9,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.cabinguard.domain.sync.SyncTelemetryUseCase
@@ -45,11 +46,11 @@ class SyncWorker @AssistedInject constructor(
         /** Chu kỳ tối thiểu WorkManager cho phép với PeriodicWorkRequest. */
         private const val SYNC_INTERVAL_MINUTES = 15L
 
-        fun enqueue(context: Context) {
+        fun createRequest(): PeriodicWorkRequest {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
-            val request = PeriodicWorkRequestBuilder<SyncWorker>(
+            return PeriodicWorkRequestBuilder<SyncWorker>(
                 SYNC_INTERVAL_MINUTES,
                 TimeUnit.MINUTES
             )
@@ -60,11 +61,14 @@ class SyncWorker @AssistedInject constructor(
                     TimeUnit.SECONDS
                 )
                 .build()
+        }
+
+        fun enqueue(context: Context) {
             WorkManager.getInstance(context)
                 .enqueueUniquePeriodicWork(
                     UNIQUE_WORK_NAME,
                     ExistingPeriodicWorkPolicy.KEEP,
-                    request
+                    createRequest()
                 )
             Log.d(TAG, "enqueued unique periodic work")
         }
