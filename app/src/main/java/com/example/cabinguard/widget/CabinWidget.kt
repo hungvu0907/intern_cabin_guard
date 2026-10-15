@@ -15,12 +15,11 @@ import androidx.glance.unit.ColorProvider
 import com.example.cabinguard.MainActivity
 import com.example.cabinguard.ui.theme.*
 import com.example.cabinguard.data.local.CabinTelemetryDao
-import com.example.cabinguard.data.settings.ThresholdSettingsRepository
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 import java.time.ZoneId
@@ -30,15 +29,13 @@ import java.time.format.DateTimeFormatter
 @InstallIn(SingletonComponent::class)
 interface WidgetDependencies {
     fun telemetryDao(): CabinTelemetryDao
-    fun settings(): ThresholdSettingsRepository
 }
 
 class CabinWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val dependencies = EntryPointAccessors.fromApplication(context, WidgetDependencies::class.java)
-        val data = combine(dependencies.telemetryDao().observeLatest(), dependencies.settings().thresholds) { row, limits ->
-            WidgetSnapshot(row, limits)
-        }.throttleWidgetSnapshots(android.os.SystemClock::elapsedRealtime)
+        val data = dependencies.telemetryDao().observeLatest().map(::WidgetSnapshot)
+            .throttleWidgetSnapshots(android.os.SystemClock::elapsedRealtime)
         val initial = data.first()
         val locale = context.resources.configuration.locales[0]
         val formatter = DateTimeFormatter.ofPattern("HH:mm:ss", locale).withZone(ZoneId.systemDefault())
