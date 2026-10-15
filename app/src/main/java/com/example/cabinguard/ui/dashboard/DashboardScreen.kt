@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.cabinguard.data.local.CabinTelemetry
-import com.example.cabinguard.domain.model.AlertThresholds
 import com.example.cabinguard.domain.model.CabinUiState
 import com.example.cabinguard.ui.theme.LocalAutomotiveMode
 import androidx.compose.animation.animateColorAsState
@@ -64,7 +63,6 @@ fun DashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val historyLogs by viewModel.historyLogs.collectAsState()
-    val thresholds by viewModel.thresholds.collectAsState()
     val isAutomotive = LocalAutomotiveMode.current
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -92,7 +90,6 @@ fun DashboardScreen(
         AutomotiveDashboardScreen(
             uiState = uiState,
             historyLogs = historyLogs,
-            thresholds = thresholds,
             onOpenSettings = onOpenSettings,
             onExportHistory = viewModel::onExportHistory,
             snackbarHostState = snackbarHostState
@@ -101,7 +98,6 @@ fun DashboardScreen(
         PhoneDashboardScreen(
             uiState = uiState,
             historyLogs = historyLogs,
-            thresholds = thresholds,
             onOpenSettings = onOpenSettings,
             onExportHistory = viewModel::onExportHistory,
             snackbarHostState = snackbarHostState
@@ -113,7 +109,6 @@ fun DashboardScreen(
 private fun AutomotiveDashboardScreen(
     uiState: CabinUiState,
     historyLogs: List<CabinTelemetry>,
-    thresholds: AlertThresholds,
     onOpenSettings: () -> Unit,
     onExportHistory: () -> Unit,
     snackbarHostState: SnackbarHostState
@@ -152,7 +147,6 @@ private fun AutomotiveDashboardScreen(
                 data = state.data,
                 isWarning = false,
                 historyLogs = historyLogs,
-                thresholds = thresholds,
                 onOpenSettings = onOpenSettings,
                 onExportHistory = onExportHistory
             )
@@ -160,7 +154,6 @@ private fun AutomotiveDashboardScreen(
                 data = state.data,
                 isWarning = true,
                 historyLogs = historyLogs,
-                thresholds = thresholds,
                 onOpenSettings = onOpenSettings,
                 onExportHistory = onExportHistory
             )
@@ -178,7 +171,6 @@ private fun AutomotiveDashboardScreen(
 private fun PhoneDashboardScreen(
     uiState: CabinUiState,
     historyLogs: List<CabinTelemetry>,
-    thresholds: AlertThresholds,
     onOpenSettings: () -> Unit,
     onExportHistory: () -> Unit,
     snackbarHostState: SnackbarHostState
@@ -248,7 +240,6 @@ private fun PhoneDashboardScreen(
                         data = state.data,
                         isWarning = false,
                         historyLogs = historyLogs,
-                        thresholds = thresholds
                     )
                 }
                 is CabinUiState.Warning -> {
@@ -256,7 +247,6 @@ private fun PhoneDashboardScreen(
                         data = state.data,
                         isWarning = true,
                         historyLogs = historyLogs,
-                        thresholds = thresholds
                     )
                 }
             }
@@ -270,7 +260,6 @@ private fun DashboardContent(
     data: CabinTelemetry,
     isWarning: Boolean,
     historyLogs: List<CabinTelemetry>,
-    thresholds: AlertThresholds,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -313,7 +302,7 @@ private fun DashboardContent(
                 minValue = 25f,
                 maxValue = 45f,
                 barColor = Color(0xFFFF9800),
-                isWarning = isWarning && data.temperature > thresholds.tempThreshold
+                isWarning = data.isTempWarning == true
             )
         }
 
@@ -341,7 +330,7 @@ private fun DashboardContent(
                 minValue = 400f,
                 maxValue = 1200f,
                 barColor = Color(0xFF4CAF50),
-                isWarning = isWarning && data.co2Level > thresholds.co2Threshold
+                isWarning = data.isCo2Warning == true
             )
         }
 
@@ -349,7 +338,7 @@ private fun DashboardContent(
         item {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "📋 Lịch sử Log (${historyLogs.size} bản ghi)",
+                text = "📋 50 bản ghi gần nhất (${historyLogs.size})",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)

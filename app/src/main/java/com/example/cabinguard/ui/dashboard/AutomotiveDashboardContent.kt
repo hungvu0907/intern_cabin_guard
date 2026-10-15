@@ -34,7 +34,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cabinguard.data.local.CabinTelemetry
-import com.example.cabinguard.domain.model.AlertThresholds
 import com.example.cabinguard.ui.theme.AutoGaugeCo2
 import com.example.cabinguard.ui.theme.AutoGaugePressure
 import com.example.cabinguard.ui.theme.AutoGaugeTemp
@@ -53,7 +52,6 @@ fun AutomotiveDashboardContent(
     data: CabinTelemetry,
     isWarning: Boolean,
     historyLogs: List<CabinTelemetry>,
-    thresholds: AlertThresholds = AlertThresholds(),
     onOpenSettings: () -> Unit = {},
     onExportHistory: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -91,7 +89,7 @@ fun AutomotiveDashboardContent(
                     minValue = 25f,
                     maxValue = 45f,
                     arcColor = AutoGaugeTemp,
-                    isWarning = isWarning && data.temperature > thresholds.tempThreshold,
+                    isWarning = data.isTempWarning == true,
                     modifier = Modifier.weight(1f)
                 )
                 AutomotiveGaugeCard(
@@ -113,7 +111,7 @@ fun AutomotiveDashboardContent(
                     minValue = 400f,
                     maxValue = 1200f,
                     arcColor = AutoGaugeCo2,
-                    isWarning = isWarning && data.co2Level > thresholds.co2Threshold,
+                    isWarning = data.isCo2Warning == true,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -163,7 +161,7 @@ fun AutomotiveDashboardContent(
 
             // Tiêu đề log
             Text(
-                text = "📋 Log (${historyLogs.size})",
+                text = "📋 50 bản ghi gần nhất (${historyLogs.size})",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
