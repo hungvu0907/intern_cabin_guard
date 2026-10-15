@@ -1,6 +1,7 @@
 package com.example.cabinguard.ui.dashboard
 
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cabinguard.data.export.CsvExporter
@@ -67,6 +68,7 @@ class DashboardViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                Log.e("DashboardViewModel", "CSV export failed", e)
                 ExportResult.Failed
             } finally {
                 exporting.value = false

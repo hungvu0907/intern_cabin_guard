@@ -6,6 +6,7 @@
 
 - Chọn **Chỉnh ngưỡng** để mở Settings. Nhiệt độ hợp lệ **30–60°C**, CO₂ **500–3000 ppm**; mặc định **38°C / 1000 ppm**. Chỉ cảnh báo khi giá trị đo lớn hơn ngưỡng.
 - Ngưỡng áp dụng ngay khi lưu. Engine chờ DataStore trước khi phát mẫu đã đánh giá; đổi ngưỡng không tạo thêm log cho mẫu cũ.
+- Dashboard và notification đánh giá trạng thái hiện tại theo ngưỡng mới. Lịch sử, CSV và widget dùng `isWarning` đã lưu tại thời điểm đo; đổi ngưỡng không viết lại cảnh báo của mẫu cũ. Widget nhận trạng thái theo ngưỡng mới khi có mẫu mới.
 - Điện thoại hỗ trợ dọc/ngang. Thiết bị có `FEATURE_AUTOMOTIVE` dùng landscape. Màn hình nhỏ có bố cục cuộn dọc.
 - Tạm dừng chỉ giữ số đo trên UI; foreground service vẫn ghi log.
 - Dashboard chỉ nạp **200 mẫu gần nhất**, tránh giữ toàn bộ lịch sử nhiều ngày trong RAM. Khi chưa có mẫu sẽ hiển thị trạng thái chờ; lỗi đọc dữ liệu có thông báo và retry sau 5 giây. Mẫu hiển thị có giờ đo để phân biệt dữ liệu cũ.
@@ -36,7 +37,9 @@ CSV nạp tối đa **1000 dòng/batch**, theo `(timestamp, id)`, giới hạn b
 
 UI dùng chung palette với theme và widget; cảnh báo/số đo đổi ngay, không chạy animation lặp lại. Nút dùng phản hồi chạm/focus của Material. Layout chuyển sang dạng cuộn khi chiều rộng/chiều cao không đủ hoặc font scale lớn hơn 1.3; Settings giới hạn chiều rộng 640dp và tránh bàn phím che nội dung.
 
-Thêm widget **CabinGuard** từ launcher: hiển thị nhiệt độ, CO₂, cảnh báo và giờ đo; chạm để mở app. Khi service chạy, cập nhật số đo tối đa mỗi 30 giây và ngay khi đổi cảnh báo/ngưỡng. Khi không có service, widget hiển thị số đo cuối cùng với giờ đo; launcher yêu cầu cập nhật định kỳ khoảng 30 phút. Lỗi cập nhật widget không dừng ghi telemetry.
+Thêm widget **CabinGuard** từ launcher: hiển thị nhiệt độ, CO₂, cảnh báo và giờ đo; chạm để mở app. Khi service chạy, cập nhật số đo thường tối đa mỗi 30 giây và ngay khi cảnh báo đã lưu thay đổi. Bỏ qua cập nhật Glance khi chưa có widget nào được gắn; các lần kiểm tra thông thường cũng được giới hạn 30 giây. Khi không có service, widget hiển thị số đo cuối cùng với giờ đo; launcher yêu cầu cập nhật định kỳ khoảng 30 phút. Lỗi cập nhật widget không dừng ghi telemetry.
+
+Lỗi xuất file và mở share sheet được ghi đầy đủ vào logcat, đồng thời hiển thị thông báo ngắn cho người dùng.
 
 ## Kiểm tra
 
@@ -47,6 +50,8 @@ Chạy bằng Gradle wrapper trên Windows:
 .\gradlew.bat :app:connectedDebugAndroidTest
 ```
 
-Unit test kiểm tra biên ngưỡng, parsing, engine với thời gian giả lập, sync batch/retry/cancellation, Settings lưu thành công/thất bại, CSV và throttle widget. Instrumentation test kiểm tra migration thật, cleanup, mock mở lại database, không ghi mẫu trùng và truy cập Settings/export trên layout nhỏ dọc/ngang.
+Unit test kiểm tra biên ngưỡng, parsing, engine với thời gian giả lập, sync batch/retry/cancellation, Settings lưu thành công/thất bại, CSV và throttle widget, bỏ qua launcher khi chưa có widget, giữ yêu cầu cập nhật khẩn khi đang bận và cảnh báo đã lưu.
+
+Instrumentation test kiểm tra migration thật, cleanup, DAO lấy batch chưa sync/markSynced, mock mở lại database, không ghi mẫu trùng, DataStore mặc định/lưu/mở lại, SyncWorker success/retry/cancellation và lịch unique KEEP mỗi 15 phút với CONNECTED. UI test kiểm tra Settings/export trên layout nhỏ dọc/ngang và nhập ngưỡng → lưu → mở lại bằng DataStore thật.
 
 `connectedDebugAndroidTest` cần thiết bị hoặc emulator. Kiểm tra trực quan bổ sung trên thiết bị: xoay Settings khi đang nhập; lưu và khởi động lại process; thêm/resize widget; đổi ngưỡng để kiểm tra màu cảnh báo; xuất hai CSV liên tiếp và đọc URI của file đầu.

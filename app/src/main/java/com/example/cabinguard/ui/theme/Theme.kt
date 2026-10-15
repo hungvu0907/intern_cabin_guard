@@ -10,50 +10,87 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-internal val CabinInk = Color(0xFF10141C)
-internal val CabinPanel = Color(0xFF1A212C)
-internal val CabinLine = Color(0x22E8E4DC)
-internal val CabinSand = Color(0xFFC4A574)
-internal val CabinSafe = Color(0xFF7D9B86)
-internal val CabinDanger = Color(0xFFC45C5C)
-internal val CabinDangerInk = Color(0xFF3A1616)
-internal val CabinDangerPanel = Color(0xFF5A2424)
-internal val CabinOnInk = Color(0xFFE8E4DC)
-internal val CabinMuted = Color(0xFF9A948A)
+// ==========================================
+// Automotive HMI & Cockpit Color Palette
+// ==========================================
+// Dark cockpit backgrounds
+val AutoBackground = Color(0xFF090D15)
+val AutoBackgroundWarning = Color(0xFF260A0E)
+val AutoSurface = Color(0xFF121927)
+val AutoSurfaceVariant = Color(0xFF1B2436)
+val AutoSurfaceWarning = Color(0xFF381016)
+val AutoSurfaceBorder = Color(0x2E6482AD)
+val AutoSurfaceBorderWarning = Color(0x66FF453A)
 
-private val CabinColorScheme = darkColorScheme(
-    primary = CabinSand,
-    onPrimary = Color(0xFF1A140C),
-    background = CabinInk,
-    surface = CabinPanel,
-    onBackground = CabinOnInk,
-    onSurface = CabinOnInk,
-    error = CabinDanger,
-    secondary = CabinSafe
+// Automotive Instrument Gauge Accents
+val AutoGaugeTemp = Color(0xFFFF9500)
+val AutoGaugePressure = Color(0xFF00B4D8)
+val AutoGaugeCo2 = Color(0xFF10B981)
+val AutoWarningRed = Color(0xFFFF453A)
+val AutoSafeGreen = Color(0xFF34D399)
+val AutoTrackColor = Color(0x26FFFFFF)
+
+// Legacy compatibility tokens for CabinWidget and existing modules
+internal val CabinInk = AutoBackground
+internal val CabinPanel = AutoSurface
+internal val CabinLine = Color(0x22E8E4DC)
+internal val CabinSand = Color(0xFF38BDF8)
+internal val CabinSafe = AutoSafeGreen
+internal val CabinDanger = AutoWarningRed
+internal val CabinDangerInk = AutoBackgroundWarning
+internal val CabinDangerPanel = AutoSurfaceWarning
+internal val CabinOnInk = Color(0xFFF1F5F9)
+internal val CabinMuted = Color(0xFF94A3B8)
+
+private val AutomotiveColorScheme = darkColorScheme(
+    primary = Color(0xFF38BDF8),
+    onPrimary = Color(0xFF090D15),
+    background = AutoBackground,
+    surface = AutoSurface,
+    surfaceVariant = AutoSurfaceVariant,
+    onBackground = Color(0xFFF1F5F9),
+    onSurface = Color(0xFFF1F5F9),
+    onSurfaceVariant = Color(0xFF94A3B8),
+    error = AutoWarningRed,
+    secondary = AutoSafeGreen
 )
 
-private val CabinTypography = Typography(
+private val AutomotiveTypography = Typography(
+    displayLarge = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 38.sp,
+        letterSpacing = (-0.5).sp,
+        color = Color.White
+    ),
     displaySmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
         fontSize = 30.sp,
         lineHeight = 34.sp,
         letterSpacing = (-0.7).sp,
-        color = CabinOnInk
+        color = Color.White
+    ),
+    titleLarge = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 20.sp,
+        letterSpacing = 0.sp,
+        color = Color.White
     ),
     titleMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 15.sp,
-        letterSpacing = 0.15.sp,
-        color = CabinOnInk
+        fontSize = 16.sp,
+        letterSpacing = 0.2.sp,
+        color = Color.White
     ),
     labelSmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         letterSpacing = 0.8.sp,
-        color = CabinMuted
+        color = Color(0xFF94A3B8)
     ),
     bodyLarge = TextStyle(
         fontFamily = FontFamily.Monospace,
@@ -61,21 +98,21 @@ private val CabinTypography = Typography(
         fontSize = 22.sp,
         letterSpacing = 0.sp,
         fontFeatureSettings = "tnum",
-        color = CabinOnInk
+        color = Color(0xFFF1F5F9)
     ),
     bodyMedium = TextStyle(
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.Normal,
         fontSize = 13.sp,
         fontFeatureSettings = "tnum",
-        color = CabinMuted
+        color = Color(0xFF94A3B8)
     ),
     bodySmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
         fontSize = 13.sp,
         lineHeight = 18.sp,
-        color = CabinMuted
+        color = Color(0xFF94A3B8)
     )
 )
 
@@ -84,8 +121,8 @@ fun CabinGuardTheme(
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = CabinColorScheme,
-        typography = CabinTypography,
+        colorScheme = AutomotiveColorScheme,
+        typography = AutomotiveTypography,
         content = content
     )
 }
