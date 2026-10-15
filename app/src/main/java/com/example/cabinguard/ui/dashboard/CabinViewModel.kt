@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import java.io.File
 import javax.inject.Inject
 
@@ -46,6 +47,7 @@ class CabinViewModel @Inject constructor(
     /** [EXP-04][EXP-06] Một lần bấm Xuất: CSV sẵn sàng, hoặc danh sách rỗng. */
     private val exportEventsChannel = Channel<ExportHistoryEvent>(Channel.BUFFERED)
     val exportEvents = exportEventsChannel.receiveAsFlow()
+    private val exportRequestMutex = Mutex()
 
     /** Lịch sử log từ Room DB — tự cập nhật khi có bản ghi mới */
     val historyLogs: StateFlow<List<CabinTelemetry>> = repository.getRecentLogs().stateIn(
@@ -81,18 +83,23 @@ class CabinViewModel @Inject constructor(
     }
 
     fun onExportHistory() {
+        if (!exportRequestMutex.tryLock()) return
         viewModelScope.launch {
-            val event = try {
-                csvExporter.export()
-                    ?.let(ExportHistoryEvent::Ready)
-                    ?: ExportHistoryEvent.Empty
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                Log.e(TAG, "Không thể xuất CSV", error)
-                ExportHistoryEvent.Failed
+            try {
+                val event = try {
+                    csvExporter.export()
+                        ?.let(ExportHistoryEvent::Ready)
+                        ?: ExportHistoryEvent.Empty
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.e(TAG, "Không thể xuất CSV", error)
+                    ExportHistoryEvent.Failed
+                }
+                exportEventsChannel.send(event)
+            } finally {
+                exportRequestMutex.unlock()
             }
-            exportEventsChannel.send(event)
         }
     }
 

@@ -5,6 +5,7 @@ import com.example.cabinguard.data.repository.CabinTelemetryRepository
 import com.example.cabinguard.domain.export.TelemetryCsvFormatter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
@@ -20,31 +21,38 @@ class TelemetryCsvExporter @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val repository: CabinTelemetryRepository,
 ) {
-    suspend fun export(): File? = withContext(Dispatchers.IO) {
-        val maxId = repository.getMaxLogId() ?: return@withContext null
-        var beforeTimestamp: Long? = null
-        var beforeId = Long.MAX_VALUE
-        var page = repository.getLogsPage(maxId, beforeTimestamp, beforeId, PAGE_SIZE)
-        if (page.isEmpty()) return@withContext null
+    private val fileMutex = Mutex()
 
-        val target = TelemetryCsvCache.targetFile(context.cacheDir)
-        val temporary = File(target.parentFile, "${target.name}.tmp")
+    suspend fun export(): File? = withContext(Dispatchers.IO) {
+        fileMutex.lock()
         try {
-            temporary.bufferedWriter(Charsets.UTF_8).use { writer ->
-                writer.appendLine(TelemetryCsvFormatter.HEADER)
-                while (page.isNotEmpty()) {
-                    page.forEach { log -> writer.appendLine(TelemetryCsvFormatter.formatRow(log)) }
-                    val last = page.last()
-                    beforeTimestamp = last.timestamp
-                    beforeId = last.id
-                    page = repository.getLogsPage(maxId, beforeTimestamp, beforeId, PAGE_SIZE)
+            val maxId = repository.getMaxLogId() ?: return@withContext null
+            var beforeTimestamp: Long? = null
+            var beforeId = Long.MAX_VALUE
+            var page = repository.getLogsPage(maxId, beforeTimestamp, beforeId, PAGE_SIZE)
+            if (page.isEmpty()) return@withContext null
+
+            val target = TelemetryCsvCache.targetFile(context.cacheDir)
+            val temporary = File(target.parentFile, "${target.name}.tmp")
+            try {
+                temporary.bufferedWriter(Charsets.UTF_8).use { writer ->
+                    writer.appendLine(TelemetryCsvFormatter.HEADER)
+                    while (page.isNotEmpty()) {
+                        page.forEach { log -> writer.appendLine(TelemetryCsvFormatter.formatRow(log)) }
+                        val last = page.last()
+                        beforeTimestamp = last.timestamp
+                        beforeId = last.id
+                        page = repository.getLogsPage(maxId, beforeTimestamp, beforeId, PAGE_SIZE)
+                    }
                 }
+                replaceAtomically(temporary, target)
+                target
+            } catch (error: Exception) {
+                temporary.delete()
+                throw error
             }
-            replaceAtomically(temporary, target)
-            target
-        } catch (error: Exception) {
-            temporary.delete()
-            throw error
+        } finally {
+            fileMutex.unlock()
         }
     }
 
