@@ -5,8 +5,8 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [CabinTelemetry::class],   // Danh sách bảng trong DB
-    version = 2,                           // v2: thêm Index(timestamp)
-    exportSchema = false                   // false = không ghi schema JSON ra thư mục; bật true khi cần versioning migration
+    version = 4,                           // v4: cờ cảnh báo riêng từng chỉ số
+    exportSchema = true
 )
 abstract class CabinDatabase : RoomDatabase() {
 

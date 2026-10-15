@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- [EXP-03] Chỉ expose CSV trong cache/export cho app nhận share. -->
+    <cache-path
+        name="history_export"
+        path="export/" />
+</paths>
