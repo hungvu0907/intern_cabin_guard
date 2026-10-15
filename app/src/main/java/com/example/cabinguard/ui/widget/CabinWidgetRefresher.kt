@@ -3,6 +3,7 @@ package com.example.cabinguard.ui.widget
 import android.content.Context
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.updateAll
+import com.example.cabinguard.data.local.CabinTelemetry
 import com.example.cabinguard.data.repository.CabinTelemetryRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -23,23 +24,35 @@ import javax.inject.Singleton
  */
 @Singleton
 @OptIn(FlowPreview::class)
-class CabinWidgetRefresher @Inject constructor(
-    @param:ApplicationContext private val context: Context,
-    private val repository: CabinTelemetryRepository,
+class CabinWidgetRefresher internal constructor(
+    private val latestReadings: Flow<CabinTelemetry?>,
+    private val hasInstalledWidgets: suspend () -> Boolean,
+    private val updateWidgets: suspend () -> Unit,
+    private val scope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    @Inject
+    constructor(
+        @ApplicationContext context: Context,
+        repository: CabinTelemetryRepository,
+    ) : this(
+        latestReadings = repository.observeLatest(),
+        hasInstalledWidgets = {
+            GlanceAppWidgetManager(context).getGlanceIds(CabinHomeWidget::class.java).isNotEmpty()
+        },
+        updateWidgets = { CabinHomeWidget().updateAll(context) },
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    )
+
     private var job: Job? = null
 
     fun start() {
         if (job?.isActive == true) return
         job = scope.launch {
-            repository.observeLatest()
+            latestReadings
                 .sampleWidgetUpdates()
                 .collect {
-                    val installedWidgets = GlanceAppWidgetManager(context)
-                        .getGlanceIds(CabinHomeWidget::class.java)
-                    if (installedWidgets.isNotEmpty()) {
-                        CabinHomeWidget().updateAll(context)
+                    if (hasInstalledWidgets()) {
+                        updateWidgets()
                     }
                 }
         }
