@@ -1,13 +1,20 @@
 package com.example.cabinguard.domain.engine
 
 import com.example.cabinguard.data.local.CabinTelemetry
+import com.example.cabinguard.data.repository.SettingsRepository
+import com.example.cabinguard.domain.model.AlertThresholds
+import com.example.cabinguard.testutil.FakeSettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -15,8 +22,40 @@ import org.junit.Test
 class CabinSensorEngineTest {
 
     @Test
+    fun `first reading waits for persisted thresholds instead of using defaults`() = runTest {
+        val saved = AlertThresholds(tempThreshold = 20f, co2Threshold = 100f)
+        val slowSettings = object : SettingsRepository {
+            override val thresholds = flow {
+                delay(500)
+                emit(saved)
+            }
+
+            override suspend fun saveThresholds(
+                tempThreshold: Float,
+                co2Threshold: Float,
+            ): Result<Unit> = error("Not used by this test")
+        }
+        val engine = CabinSensorEngine(slowSettings, UnconfinedTestDispatcher(testScheduler))
+        val readings = mutableListOf<CabinTelemetry>()
+        backgroundScope.launch { engine.sensorFlow.collect { readings.add(it) } }
+
+        runCurrent()
+        assertTrue("No reading before DataStore's first value", readings.isEmpty())
+        advanceTimeBy(499)
+        runCurrent()
+        assertTrue(readings.isEmpty())
+
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(1, readings.size)
+        assertTrue(readings.single().isWarning)
+        assertEquals(true, readings.single().isTempWarning)
+        assertEquals(true, readings.single().isCo2Warning)
+    }
+
+    @Test
     fun `sensorFlow emits values within spec ranges`() = runTest {
-        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
+        val engine = engine()
         val results = mutableListOf<CabinTelemetry>()
         backgroundScope.launch {
             engine.sensorFlow.collect { results.add(it) }
@@ -38,8 +77,9 @@ class CabinSensorEngineTest {
     }
 
     @Test
-    fun `isWarning matches temperature or CO2 threshold`() = runTest {
-        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
+    fun `isWarning uses default companion thresholds`() = runTest {
+        val defaults = AlertThresholds()
+        val engine = engine(FakeSettingsRepository(defaults))
         val results = mutableListOf<CabinTelemetry>()
         backgroundScope.launch {
             engine.sensorFlow.collect { results.add(it) }
@@ -49,17 +89,92 @@ class CabinSensorEngineTest {
 
         assertTrue(results.size >= 50)
         results.forEach { telemetry ->
-            val expected = telemetry.temperature > CabinTelemetry.TEMP_WARNING_THRESHOLD
-                || telemetry.co2Level > CabinTelemetry.CO2_WARNING_THRESHOLD
+            val expected = defaults.isWarning(telemetry.temperature, telemetry.co2Level)
             assertEquals(expected, telemetry.isWarning)
+            assertEquals(telemetry.temperature > defaults.tempThreshold, telemetry.isTempWarning)
+            assertEquals(telemetry.co2Level > defaults.co2Threshold, telemetry.isCo2Warning)
+            assertEquals(telemetry.isTempWarning == true || telemetry.isCo2Warning == true, telemetry.isWarning)
         }
         assertTrue(results.any { it.isWarning })
         assertTrue(results.any { !it.isWarning })
     }
 
     @Test
+    fun `low custom threshold marks typical reading as warning`() = runTest {
+        val engine = engine(
+            FakeSettingsRepository(AlertThresholds(tempThreshold = 20f, co2Threshold = 100f))
+        )
+        val collected = mutableListOf<CabinTelemetry>()
+        backgroundScope.launch { engine.sensorFlow.collect { collected.add(it) } }
+        runCurrent()
+
+        assertTrue(collected.last().isWarning)
+        assertEquals(true, collected.last().isTempWarning)
+        assertEquals(true, collected.last().isCo2Warning)
+    }
+
+    @Test
+    fun `high custom threshold keeps typical reading normal`() = runTest {
+        val engine = engine(
+            FakeSettingsRepository(AlertThresholds(tempThreshold = 50f, co2Threshold = 2000f))
+        )
+        val collected = mutableListOf<CabinTelemetry>()
+        backgroundScope.launch { engine.sensorFlow.collect { collected.add(it) } }
+        runCurrent()
+
+        assertFalse(collected.last().isWarning)
+        assertEquals(false, collected.last().isTempWarning)
+        assertEquals(false, collected.last().isCo2Warning)
+    }
+
+    @Test
+    fun `temperature warning does not mark co2 and vice versa`() = runTest {
+        val temperatureOnly = engine(
+            FakeSettingsRepository(AlertThresholds(tempThreshold = 20f, co2Threshold = 2000f))
+        )
+        val co2Only = engine(
+            FakeSettingsRepository(AlertThresholds(tempThreshold = 50f, co2Threshold = 100f))
+        )
+        val temperatureReadings = mutableListOf<CabinTelemetry>()
+        val co2Readings = mutableListOf<CabinTelemetry>()
+        backgroundScope.launch { temperatureOnly.sensorFlow.collect { temperatureReadings.add(it) } }
+        backgroundScope.launch { co2Only.sensorFlow.collect { co2Readings.add(it) } }
+        runCurrent()
+
+        assertEquals(true, temperatureReadings.single().isTempWarning)
+        assertEquals(false, temperatureReadings.single().isCo2Warning)
+        assertEquals(false, co2Readings.single().isTempWarning)
+        assertEquals(true, co2Readings.single().isCo2Warning)
+        assertTrue(temperatureReadings.single().isWarning)
+        assertTrue(co2Readings.single().isWarning)
+    }
+
+    @Test
+    fun `changing threshold does not re-emit the previous reading`() = runTest {
+        val fake = FakeSettingsRepository(AlertThresholds(tempThreshold = 50f, co2Threshold = 2000f))
+        val engine = engine(fake)
+        val collected = mutableListOf<CabinTelemetry>()
+        backgroundScope.launch { engine.sensorFlow.collect { collected.add(it) } }
+        runCurrent()
+        assertEquals(1, collected.size)
+        assertFalse(collected.last().isWarning)
+
+        fake.emit(AlertThresholds(tempThreshold = 20f, co2Threshold = 100f))
+        runCurrent()
+
+        assertEquals("threshold changes must not create a duplicate reading", 1, collected.size)
+
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(2, collected.size)
+        assertTrue(collected.last().isWarning)
+        assertEquals(true, collected.last().isTempWarning)
+        assertEquals(true, collected.last().isCo2Warning)
+    }
+
+    @Test
     fun `setInterval 5s delays the next emission`() = runTest {
-        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
+        val engine = engine()
         engine.setInterval(5_000L)
         val collected = mutableListOf<CabinTelemetry>()
         backgroundScope.launch {
@@ -80,7 +195,7 @@ class CabinSensorEngineTest {
 
     @Test
     fun `default interval emits about every 1 second`() = runTest {
-        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
+        val engine = engine()
         val collected = mutableListOf<CabinTelemetry>()
         backgroundScope.launch {
             engine.sensorFlow.collect { collected.add(it) }
@@ -100,7 +215,7 @@ class CabinSensorEngineTest {
 
     @Test
     fun `two collectors receive the same shared emissions`() = runTest {
-        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
+        val engine = engine()
         val first = mutableListOf<CabinTelemetry>()
         val second = mutableListOf<CabinTelemetry>()
 
@@ -116,4 +231,11 @@ class CabinSensorEngineTest {
         assertEquals(first.map { it.temperature }, second.map { it.temperature })
         assertEquals(first.map { it.isWarning }, second.map { it.isWarning })
     }
+
+    private fun TestScope.engine(
+        settings: FakeSettingsRepository = FakeSettingsRepository()
+    ): CabinSensorEngine = CabinSensorEngine(
+        settings,
+        UnconfinedTestDispatcher(testScheduler)
+    )
 }

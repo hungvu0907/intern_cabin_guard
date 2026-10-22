@@ -10,12 +10,16 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,11 +44,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.Manifest
 import android.os.Build
+import android.util.Log
 import com.example.cabinguard.service.CabinTelemetryService
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -52,36 +59,74 @@ import java.util.Locale
 
 @Composable
 fun DashboardScreen(
+    onOpenSettings: () -> Unit = {},
     viewModel: CabinViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val historyLogs by viewModel.historyLogs.collectAsState()
     val isAutomotive = LocalAutomotiveMode.current
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel) {
+        viewModel.exportEvents.collect { event ->
+            when (event) {
+                ExportHistoryEvent.Empty ->
+                    snackbarHostState.showSnackbar("Chưa có lịch sử để xuất")
+                ExportHistoryEvent.Failed ->
+                    snackbarHostState.showSnackbar("Không xuất được lịch sử")
+                is ExportHistoryEvent.Ready -> {
+                    try {
+                        HistoryShare.share(context, event.file)
+                    } catch (error: Exception) {
+                        Log.e("Dashboard", "Không thể mở bảng chia sẻ CSV", error)
+                        snackbarHostState.showSnackbar("Không xuất được lịch sử")
+                    }
+                }
+            }
+        }
+    }
 
     if (isAutomotive) {
-        AutomotiveDashboardScreen(uiState = uiState, historyLogs = historyLogs)
+        AutomotiveDashboardScreen(
+            uiState = uiState,
+            historyLogs = historyLogs,
+            onOpenSettings = onOpenSettings,
+            onExportHistory = viewModel::onExportHistory,
+            snackbarHostState = snackbarHostState
+        )
     } else {
-        PhoneDashboardScreen(uiState = uiState, historyLogs = historyLogs)
+        PhoneDashboardScreen(
+            uiState = uiState,
+            historyLogs = historyLogs,
+            onOpenSettings = onOpenSettings,
+            onExportHistory = viewModel::onExportHistory,
+            snackbarHostState = snackbarHostState
+        )
     }
 }
 
 @Composable
 private fun AutomotiveDashboardScreen(
     uiState: CabinUiState,
-    historyLogs: List<CabinTelemetry>
+    historyLogs: List<CabinTelemetry>,
+    onOpenSettings: () -> Unit,
+    onExportHistory: () -> Unit,
+    snackbarHostState: SnackbarHostState
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .testTag("automotive_dashboard")
             .background(MaterialTheme.colorScheme.background)
     ) {
         when (val state = uiState) {
             is CabinUiState.Loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
@@ -90,15 +135,35 @@ private fun AutomotiveDashboardScreen(
                             color = MaterialTheme.colorScheme.onBackground
                         )
                     }
+                    TextButton(
+                        onClick = onExportHistory,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                    ) {
+                        Text("Xuất CSV")
+                    }
                 }
             }
             is CabinUiState.Normal -> AutomotiveDashboardContent(
-                data = state.data, isWarning = false, historyLogs = historyLogs
+                data = state.data,
+                isWarning = false,
+                historyLogs = historyLogs,
+                onOpenSettings = onOpenSettings,
+                onExportHistory = onExportHistory
             )
             is CabinUiState.Warning -> AutomotiveDashboardContent(
-                data = state.data, isWarning = true, historyLogs = historyLogs
+                data = state.data,
+                isWarning = true,
+                historyLogs = historyLogs,
+                onOpenSettings = onOpenSettings,
+                onExportHistory = onExportHistory
             )
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }
 
@@ -107,7 +172,10 @@ private fun AutomotiveDashboardScreen(
 @Composable
 private fun PhoneDashboardScreen(
     uiState: CabinUiState,
-    historyLogs: List<CabinTelemetry>
+    historyLogs: List<CabinTelemetry>,
+    onOpenSettings: () -> Unit,
+    onExportHistory: () -> Unit,
+    snackbarHostState: SnackbarHostState
 ) {
     val isWarning = uiState is CabinUiState.Warning
     val backgroundColor by animateColorAsState(
@@ -126,6 +194,7 @@ private fun PhoneDashboardScreen(
         label = "topbar_text_color"
     )
     Scaffold(
+        modifier = Modifier.testTag("phone_dashboard"),
         topBar = {
             TopAppBar(
                 title = {
@@ -134,12 +203,21 @@ private fun PhoneDashboardScreen(
                         fontWeight = FontWeight.Bold
                     )
                 },
+                actions = {
+                    TextButton(onClick = onExportHistory) {
+                        Text("Xuất CSV", color = topBarTextColor)
+                    }
+                    TextButton(onClick = onOpenSettings) {
+                        Text("Cài đặt", color = topBarTextColor)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = topBarColor,
                     titleContentColor = topBarTextColor
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -164,14 +242,14 @@ private fun PhoneDashboardScreen(
                     DashboardContent(
                         data = state.data,
                         isWarning = false,
-                        historyLogs = historyLogs
+                        historyLogs = historyLogs,
                     )
                 }
                 is CabinUiState.Warning -> {
                     DashboardContent(
                         data = state.data,
                         isWarning = true,
-                        historyLogs = historyLogs
+                        historyLogs = historyLogs,
                     )
                 }
             }
@@ -227,7 +305,7 @@ private fun DashboardContent(
                 minValue = 25f,
                 maxValue = 45f,
                 barColor = Color(0xFFFF9800),
-                isWarning = isWarning && data.temperature > CabinTelemetry.TEMP_WARNING_THRESHOLD
+                isWarning = data.isTempWarning == true
             )
         }
 
@@ -255,7 +333,7 @@ private fun DashboardContent(
                 minValue = 400f,
                 maxValue = 1200f,
                 barColor = Color(0xFF4CAF50),
-                isWarning = isWarning && data.co2Level > CabinTelemetry.CO2_WARNING_THRESHOLD
+                isWarning = data.isCo2Warning == true
             )
         }
 
@@ -263,7 +341,7 @@ private fun DashboardContent(
         item {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "📋 Lịch sử Log (${historyLogs.size} bản ghi)",
+                text = "📋 50 bản ghi gần nhất (${historyLogs.size})",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -348,13 +426,13 @@ private fun LogHistoryItem(log: CabinTelemetry) {
             Text(
                 text = "${String.format("%.1f", log.temperature)}°C",
                 fontWeight = FontWeight.Medium,
-                color = if (log.temperature > CabinTelemetry.TEMP_WARNING_THRESHOLD)
+                color = if (log.isTempWarning == true)
                     Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = "${String.format("%.0f", log.co2Level)} ppm",
                 fontWeight = FontWeight.Medium,
-                color = if (log.co2Level > CabinTelemetry.CO2_WARNING_THRESHOLD)
+                color = if (log.isCo2Warning == true)
                     Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface
             )
             Text(
