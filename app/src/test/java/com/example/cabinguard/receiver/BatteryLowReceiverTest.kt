@@ -1,6 +1,7 @@
 package com.example.cabinguard.receiver
 
 import com.example.cabinguard.domain.engine.CabinSensorEngine
+import com.example.cabinguard.testutil.FakeSettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -15,7 +16,7 @@ class BatteryLowReceiverTest {
 
     @Test
     fun `BATTERY_LOW stretches interval to 5 seconds`() = runTest {
-        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
+        val engine = CabinSensorEngine(FakeSettingsRepository(), UnconfinedTestDispatcher(testScheduler))
         BatteryLowReceiver(engine).handleAction(BatteryLowReceiver.ACTION_BATTERY_LOW)
 
         val collected = mutableListOf<Any>()
@@ -36,7 +37,7 @@ class BatteryLowReceiverTest {
 
     @Test
     fun `BATTERY_OKAY restores 1 second interval after low battery`() = runTest {
-        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
+        val engine = CabinSensorEngine(FakeSettingsRepository(), UnconfinedTestDispatcher(testScheduler))
         val receiver = BatteryLowReceiver(engine)
         receiver.handleAction(BatteryLowReceiver.ACTION_BATTERY_LOW)
         receiver.handleAction(BatteryLowReceiver.ACTION_BATTERY_OKAY)
@@ -59,7 +60,7 @@ class BatteryLowReceiverTest {
 
     @Test
     fun `unknown action keeps default 1 second interval`() = runTest {
-        val engine = CabinSensorEngine(UnconfinedTestDispatcher(testScheduler))
+        val engine = CabinSensorEngine(FakeSettingsRepository(), UnconfinedTestDispatcher(testScheduler))
         BatteryLowReceiver(engine).handleAction("android.intent.action.POWER_CONNECTED")
 
         val collected = mutableListOf<Any>()

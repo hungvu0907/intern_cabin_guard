@@ -16,13 +16,41 @@ interface CabinTelemetryDao {
     @Query("SELECT * FROM cabin_telemetry ORDER BY timestamp DESC")
     fun getAllLogs(): Flow<List<CabinTelemetry>>
 
+    /** Chốt ID cao nhất khi bắt đầu export để bỏ qua các bản ghi được chèn sau đó. */
+    @Query("SELECT MAX(id) FROM cabin_telemetry")
+    suspend fun getMaxLogId(): Long?
+
+    /** Phân trang ổn định khi Room có thêm hoặc xóa dòng; id phá hòa timestamp trùng nhau. */
+    @Query("""
+        SELECT * FROM cabin_telemetry
+        WHERE id <= :maxId
+          AND (:beforeTimestamp IS NULL OR timestamp < :beforeTimestamp
+               OR (timestamp = :beforeTimestamp AND id < :beforeId))
+        ORDER BY timestamp DESC, id DESC
+        LIMIT :limit
+    """)
+    suspend fun getLogsPage(
+        maxId: Long,
+        beforeTimestamp: Long?,
+        beforeId: Long,
+        limit: Int,
+    ): List<CabinTelemetry>
+
     /** Lấy số lượng log giới hạn */
     @Query("SELECT * FROM cabin_telemetry ORDER BY timestamp DESC LIMIT :limit")
     fun getRecentLogs(limit: Int): Flow<List<CabinTelemetry>>
 
-    /** Xóa các log cũ hơn thời gian hiện tại */
+    /** [WDG-03] Một bản ghi mới nhất — widget không gọi DAO trực tiếp. */
+    @Query("SELECT * FROM cabin_telemetry ORDER BY timestamp DESC LIMIT 1")
+    fun observeLatest(): Flow<CabinTelemetry?>
+
+    /** Dọn bình thường chỉ xóa dữ liệu đã được đồng bộ. */
+    @Query("DELETE FROM cabin_telemetry WHERE is_synced = 1 AND timestamp < :timestamp")
+    suspend fun deleteSyncedOlderThan(timestamp: Long)
+
+    /** Trần cứng để database không tăng vô hạn khi cloud hỏng kéo dài. */
     @Query("DELETE FROM cabin_telemetry WHERE timestamp < :timestamp")
-    suspend fun deleteOlderThan(timestamp: Long)
+    suspend fun deleteOlderThanHardLimit(timestamp: Long)
 
     /** Đếm tổng số log trong DB */
     @Query("SELECT COUNT(*) FROM cabin_telemetry")
@@ -31,4 +59,12 @@ interface CabinTelemetryDao {
     /** Xóa toàn bộ dữ liệu trong DB (sử dụng khi cần reset app hoặc test) */
     @Query("DELETE FROM cabin_telemetry")
     suspend fun clearAll()
+
+    /** Bản ghi chưa có trên cloud, cũ trước để sync theo thứ tự ghi. */
+    @Query("SELECT * FROM cabin_telemetry WHERE is_synced = 0 ORDER BY timestamp ASC LIMIT :limit")
+    suspend fun getUnsynced(limit: Int): List<CabinTelemetry>
+
+    /** Đánh dấu đã sync. Gọi với danh sách id không rỗng. */
+    @Query("UPDATE cabin_telemetry SET is_synced = 1 WHERE id IN (:ids)")
+    suspend fun markSynced(ids: List<Long>)
 }
