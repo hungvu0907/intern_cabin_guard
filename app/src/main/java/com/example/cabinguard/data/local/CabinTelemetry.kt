@@ -33,6 +33,13 @@ data class CabinTelemetry(
     @ColumnInfo(name = "is_warning")
     val isWarning: Boolean = false,
 
+    /** null: log trước v4 không biết chỉ số nào đã vượt ngưỡng tại lúc ghi. */
+    @ColumnInfo(name = "is_temp_warning")
+    val isTempWarning: Boolean? = null,
+
+    @ColumnInfo(name = "is_co2_warning")
+    val isCo2Warning: Boolean? = null,
+
     /** false cho đến khi SyncWorker đẩy lên cloud thành công. */
     @ColumnInfo(name = "is_synced", defaultValue = "0")
     val isSynced: Boolean = false

@@ -52,10 +52,39 @@ class CabinTelemetryDaoTest {
 
         dao.deleteSyncedOlderThan(timestamp = 100)
 
-        assertEquals(listOf(1L), dao.getLogsPage(limit = 10, offset = 0).map { it.id })
+        assertEquals(listOf(1L), dao.getLogsPage(
+            maxId = dao.getMaxLogId()!!,
+            beforeTimestamp = null,
+            beforeId = Long.MAX_VALUE,
+            limit = 10,
+        ).map { it.id })
 
         dao.deleteOlderThanHardLimit(timestamp = 100)
-        assertTrue(dao.getLogsPage(limit = 10, offset = 0).isEmpty())
+        assertTrue(dao.getLogsPage(
+            maxId = 2,
+            beforeTimestamp = null,
+            beforeId = Long.MAX_VALUE,
+            limit = 10,
+        ).isEmpty())
+    }
+
+    @Test
+    fun storesIndependentWarningFlags() = runTest {
+        dao.insert(sample(id = 4, timestamp = 40, isSynced = false).copy(
+            isWarning = true,
+            isTempWarning = false,
+            isCo2Warning = true,
+        ))
+
+        val stored = dao.getLogsPage(
+            maxId = 4,
+            beforeTimestamp = null,
+            beforeId = Long.MAX_VALUE,
+            limit = 10,
+        ).single()
+        assertTrue(stored.isWarning)
+        assertEquals(false, stored.isTempWarning)
+        assertEquals(true, stored.isCo2Warning)
     }
 
     private fun sample(id: Long, timestamp: Long, isSynced: Boolean) = CabinTelemetry(

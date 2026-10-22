@@ -18,11 +18,13 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** One JSON document per record; an upsert never rewrites the complete dataset. */
+/** Mock-only storage: one JSON per record, retained up to a fixed file count (not a durable cloud). */
 @Singleton
 class MockRestTelemetryCloudApi internal constructor(
     private val directory: File,
     private val deviceId: String,
+    private val maxDocuments: Int = MAX_DOCUMENTS,
+    private val maxCorruptBackups: Int = MAX_CORRUPT_BACKUPS,
 ) : TelemetryCloudApi {
 
     @Inject
@@ -34,6 +36,11 @@ class MockRestTelemetryCloudApi internal constructor(
     private val lock = Any()
     private val safeDeviceId = deviceId.replace(Regex("[^A-Za-z0-9._-]"), "_")
 
+    init {
+        require(maxDocuments > 0)
+        require(maxCorruptBackups >= 0)
+    }
+
     override suspend fun upsertAll(records: List<CabinTelemetry>) {
         if (records.isEmpty()) return
         withContext(Dispatchers.IO) {
@@ -42,6 +49,7 @@ class MockRestTelemetryCloudApi internal constructor(
                 records.chunked(WRITE_CHUNK_SIZE).forEach { chunk ->
                     chunk.forEach(::writeDocument)
                 }
+                pruneFiles()
                 Log.i(TAG, "Upsert ${records.size} bản ghi → ${directory.absolutePath}")
             }
         }
@@ -60,6 +68,8 @@ class MockRestTelemetryCloudApi internal constructor(
             .put("pressure", record.pressure.toDouble())
             .put("co2Level", record.co2Level.toDouble())
             .put("isWarning", record.isWarning)
+            .put("isTempWarning", record.isTempWarning ?: JSONObject.NULL)
+            .put("isCo2Warning", record.isCo2Warning ?: JSONObject.NULL)
         val temporary = File(directory, "${target.name}.tmp")
         try {
             temporary.writeText(json.toString(2), Charsets.UTF_8)
@@ -96,12 +106,33 @@ class MockRestTelemetryCloudApi internal constructor(
         }
     }
 
+    /** Only mock-generated files are eligible; unrelated files in the directory are untouched. */
+    private fun pruneFiles() {
+        val files = directory.listFiles() ?: throw IOException("Không đọc được ${directory.absolutePath}")
+        pruneOldest(files.filter { it.isFile && DOCUMENT_NAME.matches(it.name) }, maxDocuments)
+        pruneOldest(files.filter { it.isFile && CORRUPT_NAME.matches(it.name) }, maxCorruptBackups)
+    }
+
+    private fun pruneOldest(files: List<File>, limit: Int) {
+        if (files.size <= limit) return
+        files.sortedWith(compareByDescending<File> { it.lastModified() }.thenByDescending { it.name })
+            .drop(limit)
+            .forEach { file ->
+                if (!file.delete()) Log.w(TAG, "Không xóa được mock file cũ: ${file.name}")
+            }
+    }
+
     companion object {
         const val RELATIVE_DIRECTORY = "mock_cloud/telemetry"
+        // Deliberate mock retention: old synced documents and corrupt backups may be discarded.
+        internal const val MAX_DOCUMENTS = 10_000
+        internal const val MAX_CORRUPT_BACKUPS = 20
         private const val PREFERENCES_NAME = "mock_cloud_identity"
         private const val DEVICE_ID_KEY = "device_id"
         private const val WRITE_CHUNK_SIZE = 50
         private const val TAG = "CabinSync"
+        private val DOCUMENT_NAME = Regex("[A-Za-z0-9._-]+_[0-9]+\\.json")
+        private val CORRUPT_NAME = Regex("[A-Za-z0-9._-]+_[0-9]+\\.json\\.corrupt-[0-9]+")
 
         private fun getOrCreateDeviceId(context: Context): String {
             val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)

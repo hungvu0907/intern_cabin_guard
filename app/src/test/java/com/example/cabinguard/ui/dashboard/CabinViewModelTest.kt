@@ -15,6 +15,7 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -142,6 +143,31 @@ class CabinViewModelTest {
         val event = viewModel.exportEvents.first()
         assertTrue(event is ExportHistoryEvent.Ready)
         assertEquals(file, (event as ExportHistoryEvent.Ready).file)
+    }
+
+    @Test
+    fun `second export press is ignored while first export is running`() = runTest {
+        val exportStarted = CompletableDeferred<Unit>()
+        val finishExport = CompletableDeferred<Unit>()
+        val file = java.io.File("build/tmp/cabinguard_history.csv")
+        coEvery { csvExporter.export() } coAnswers {
+            exportStarted.complete(Unit)
+            finishExport.await()
+            file
+        }
+        val viewModel = viewModel()
+
+        viewModel.onExportHistory()
+        exportStarted.await()
+        viewModel.onExportHistory()
+
+        coVerify(exactly = 1) { csvExporter.export() }
+        finishExport.complete(Unit)
+        assertEquals(ExportHistoryEvent.Ready(file), viewModel.exportEvents.first())
+
+        viewModel.onExportHistory()
+        assertEquals(ExportHistoryEvent.Ready(file), viewModel.exportEvents.first())
+        coVerify(exactly = 2) { csvExporter.export() }
     }
 
     private fun viewModel() = CabinViewModel(

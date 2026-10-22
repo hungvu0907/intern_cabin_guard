@@ -16,9 +16,25 @@ interface CabinTelemetryDao {
     @Query("SELECT * FROM cabin_telemetry ORDER BY timestamp DESC")
     fun getAllLogs(): Flow<List<CabinTelemetry>>
 
-    /** Đọc lịch sử theo trang để export không nạp toàn bộ database vào RAM. */
-    @Query("SELECT * FROM cabin_telemetry ORDER BY timestamp DESC LIMIT :limit OFFSET :offset")
-    suspend fun getLogsPage(limit: Int, offset: Int): List<CabinTelemetry>
+    /** Chốt ID cao nhất khi bắt đầu export để bỏ qua các bản ghi được chèn sau đó. */
+    @Query("SELECT MAX(id) FROM cabin_telemetry")
+    suspend fun getMaxLogId(): Long?
+
+    /** Phân trang ổn định khi Room có thêm hoặc xóa dòng; id phá hòa timestamp trùng nhau. */
+    @Query("""
+        SELECT * FROM cabin_telemetry
+        WHERE id <= :maxId
+          AND (:beforeTimestamp IS NULL OR timestamp < :beforeTimestamp
+               OR (timestamp = :beforeTimestamp AND id < :beforeId))
+        ORDER BY timestamp DESC, id DESC
+        LIMIT :limit
+    """)
+    suspend fun getLogsPage(
+        maxId: Long,
+        beforeTimestamp: Long?,
+        beforeId: Long,
+        limit: Int,
+    ): List<CabinTelemetry>
 
     /** Lấy số lượng log giới hạn */
     @Query("SELECT * FROM cabin_telemetry ORDER BY timestamp DESC LIMIT :limit")
