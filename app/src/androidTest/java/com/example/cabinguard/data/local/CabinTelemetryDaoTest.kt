@@ -3,6 +3,7 @@ package com.example.cabinguard.data.local
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -41,8 +42,14 @@ class CabinTelemetryDaoTest {
         dao.markSynced(listOf(2L))
         val remaining = dao.getUnsynced(limit = 10)
         assertEquals(listOf(1L), remaining.map { it.id })
-        assertTrue(pending.first { it.id == 2L }.isSynced.not())
-        assertFalse(remaining.first().isSynced)
+        val stored = dao.getLogsPage(
+            maxId = 3,
+            beforeTimestamp = null,
+            beforeId = Long.MAX_VALUE,
+            limit = 10,
+        )
+        assertTrue(stored.single { it.id == 2L }.isSynced)
+        assertFalse(stored.single { it.id == 1L }.isSynced)
     }
 
     @Test
@@ -85,6 +92,7 @@ class CabinTelemetryDaoTest {
         assertTrue(stored.isWarning)
         assertEquals(false, stored.isTempWarning)
         assertEquals(true, stored.isCo2Warning)
+        assertEquals(stored, dao.observeLatest().first())
     }
 
     private fun sample(id: Long, timestamp: Long, isSynced: Boolean) = CabinTelemetry(

@@ -46,6 +46,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.Manifest
@@ -116,6 +117,7 @@ private fun AutomotiveDashboardScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .testTag("automotive_dashboard")
             .background(MaterialTheme.colorScheme.background)
     ) {
         when (val state = uiState) {
@@ -192,6 +194,7 @@ private fun PhoneDashboardScreen(
         label = "topbar_text_color"
     )
     Scaffold(
+        modifier = Modifier.testTag("phone_dashboard"),
         topBar = {
             TopAppBar(
                 title = {
