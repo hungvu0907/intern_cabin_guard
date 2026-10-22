@@ -1,9 +1,11 @@
 package com.example.cabinguard
 
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.ui.platform.LocalConfiguration
 import com.example.cabinguard.ui.dashboard.DashboardScreen
 import com.example.cabinguard.ui.theme.CabinGuardTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -14,7 +16,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            CabinGuardTheme {
+            val isLandscape = LocalConfiguration.current.orientation ==
+                Configuration.ORIENTATION_LANDSCAPE
+
+            CabinGuardTheme(automotiveMode = isLandscape) {
                 DashboardScreen()
             }
         }
